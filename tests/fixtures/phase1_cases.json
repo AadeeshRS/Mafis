@@ -1,0 +1,8 @@
+{
+  "manifest_version":"1.0",
+  "cases":[
+    {"case_id":"nvidia_2024","question":"Assess FY2024 financial health, revenue growth, profitability and liquidity","document":{"path":"tests/fixtures/nvidia_2024/annual_report.pdf","source_url":"https://s201.q4cdn.com/141608511/files/doc_financials/2024/ar/NVIDIA-2024-Annual-Report.pdf","title":"NVIDIA FY2024 Annual Report (including Form 10-K)","entity":"NVIDIA Corporation"},"gold":"tests/fixtures/nvidia_2024/annotations.json"},
+    {"case_id":"apple_2024","question":"Assess FY2024 financial health, revenue growth, profitability and liquidity","document":{"path":"tests/fixtures/apple_2024/annual_report.pdf","source_url":"https://s2.q4cdn.com/470004039/files/doc_earnings/2024/q4/filing/10-Q4-2024-As-Filed.pdf","title":"Apple Inc. FY2024 Form 10-K","entity":"Apple Inc."},"gold":"tests/fixtures/apple_2024/annotations.json"},
+    {"case_id":"coca_cola_2024","question":"Assess FY2024 financial health, revenue growth, profitability and liquidity","document":{"path":"tests/fixtures/coca_cola_2024/annual_report.pdf","source_url":"https://investors.coca-colacompany.com/_assets/_7083339f2d7f4eaeaf900ef76897f80e/cocacolacompany/db/1007/11020/document/2024_10-K_%28Bookmarked%29.pdf","title":"The Coca-Cola Company FY2024 Form 10-K","entity":"The Coca-Cola Company"},"gold":"tests/fixtures/coca_cola_2024/annotations.json"}
+  ]
+}

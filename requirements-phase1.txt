@@ -1,0 +1,9 @@
+# Runnable Phase 1 batch; excludes unrelated future agents/OCR/backend packages.
+-r requirements-extraction.txt
+chromadb==1.0.15
+langgraph==0.6.4
+langchain-core==0.3.75
+# Official SDK version compatible with the existing Pydantic 2.11.7 pin.
+google-genai==2.0.1
+python-dotenv==1.1.1
+numpy==2.2.6

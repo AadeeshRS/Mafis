@@ -1,0 +1,14 @@
+{
+  "document": {"title":"Apple Inc. FY2024 Form 10-K","entity":"Apple Inc.","source_url":"https://s2.q4cdn.com/470004039/files/doc_earnings/2024/q4/filing/10-Q4-2024-As-Filed.pdf","sha256":"319e1217afe72f194575e63350ea6c813eaf5caf0c24e59ce8b221fc1b3ea0d4","byte_length":963934,"pdf_page_count":121},
+  "annotation_method":"Manually checked rendered official PDF statements (32,34), currency (30) and calendar policy (37). Test-only ground truth.",
+  "currency":"USD","unit":"currency","scale":1000000,
+  "current_start":"2023-10-01","prior_start":"2022-09-25",
+  "values":[
+    {"metric":"revenue","value":"391035","period_end":"2024-09-28","pdf_page":32,"printed_page":"29","row":"Total net sales"},
+    {"metric":"revenue","value":"383285","period_end":"2023-09-30","pdf_page":32,"printed_page":"29","row":"Total net sales"},
+    {"metric":"operating_income","value":"123216","period_end":"2024-09-28","pdf_page":32,"printed_page":"29","row":"Operating income"},
+    {"metric":"net_income","value":"93736","period_end":"2024-09-28","pdf_page":32,"printed_page":"29","row":"Net income"},
+    {"metric":"current_assets","value":"152987","period_end":"2024-09-28","pdf_page":34,"printed_page":"31","row":"Total current assets"},
+    {"metric":"current_liabilities","value":"176392","period_end":"2024-09-28","pdf_page":34,"printed_page":"31","row":"Total current liabilities"}
+  ]
+}

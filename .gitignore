@@ -28,6 +28,8 @@ MANIFEST
 
 # Virtual Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -62,5 +64,21 @@ chroma_db/
 # Logs
 *.log
 
-# Project specific
-/useful_md_files/
+# Canonical specifications: expose only the reviewed document types.
+/useful_md_files/*
+!/useful_md_files/*.md
+!/useful_md_files/mafis_architecture_preview.png
+
+# Local AI coordination and handoff notes; canonical project specs stay visible.
+/useful_md_files/worker-*.md
+/useful_md_files/controller-*.md
+/useful_md_files/orchestrator-*.md
+/useful_md_files/*-cli-result.md
+/useful_md_files/*-worker-result.md
+/useful_md_files/*-review-fixes-result.md
+/useful_md_files/provider-diagnostics.md
+/useful_md_files/prompt.md
+
+# Local inspection/render outputs, never source fixtures.
+/tmp/
+/output/

@@ -1,0 +1,13 @@
+{
+  "title": "Federal Reserve issues FOMC statement — January 31, 2024",
+  "entity": "United States economy",
+  "source_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20240131a.htm",
+  "source_type": "news",
+  "published_at": "2024-01-31T19:00:00Z",
+  "retrieved_at": "2026-10-27T13:44:50Z",
+  "as_of_date": "2024-01-31",
+  "section": "FOMC statement, opening two paragraphs",
+  "text_file": "fomc_2024_01_31.txt",
+  "sha256": "0287598ec70010f6e0d6bc1e7c3ca871df54dd38213ff73ed84f8aacbb858015",
+  "capture_note": "First two statement paragraphs selected verbatim from the official Federal Reserve page using browser retrieval on 2026-10-27. Publication time 2:00 p.m. EST is 19:00 UTC. UTF-8 text snapshot, not a full HTML archive. No investment or current-conditions inference."
+}

@@ -1,0 +1,3 @@
+# Preserve official document fixtures and image assets byte-for-byte.
+*.pdf binary
+*.png binary

@@ -1,0 +1,75 @@
+{
+  "document": {
+    "title": "NVIDIA FY2024 Annual Report (including Form 10-K)",
+    "entity": "NVIDIA Corporation",
+    "ticker": "NVDA",
+    "exchange": "Nasdaq",
+    "fiscal_year": 2024,
+    "fiscal_year_end": "2024-01-28",
+    "file": "annual_report.pdf",
+    "source_url": "https://s201.q4cdn.com/141608511/files/doc_financials/2024/ar/NVIDIA-2024-Annual-Report.pdf",
+    "official_index_url": "https://investor.nvidia.com/financial-info/annual-reports-and-proxies/default.aspx",
+    "discovery_url": "https://investor.nvidia.com/search-results/default.aspx?PageNumber=46&SearchTerm=",
+    "sha256": "b0de35ded9da9463d5c33dce77cf9b2158b88cf666f144646d0cc64af23c5960",
+    "byte_length": 34826878,
+    "pdf_page_count": 187,
+    "retrieved_on": "2026-10-22",
+    "edition_note": "Publisher-hosted archived annual-report package including Annual Review, Proxy Statement, and Form 10-K. The current index also links a differently named updated insert. This hash identifies the exact fixture edition.",
+    "currency": "USD",
+    "currency_basis": {
+      "pdf_page": 157,
+      "printed_page": "57",
+      "section": "Foreign Currency Remeasurement",
+      "quote": "We use the U.S. dollar as our functional currency for our subsidiaries."
+    }
+  },
+  "annotation_policy": "Test-only gold. Values, rows, date columns, and scale were visually checked on rendered source pages; annotations were entered independently of extractor outputs. Production extraction never reads this file. Date headings state duration ends, not starts: no calendar-year start is invented. Note 1 (printed page 55 / PDF page 155) states a 52/53-week fiscal calendar and that FY2024/FY2023/FY2022 were 52-week years.",
+  "reviewed_on": "2026-10-22",
+  "unit": "currency",
+  "currency": "USD",
+  "scale": 1000000,
+  "values": [
+    {
+      "metric": "revenue", "value": "60922", "base_value": "60922000000",
+      "raw_value": "60,922", "period_kind": "duration", "period_end": "2024-01-28", "period_start": null,
+      "pdf_page": 150, "printed_page": "50", "table": "Consolidated Statements of Income",
+      "row": "Revenue", "column": "Jan 28, 2024", "scale_header": "(In millions, except per share data)",
+      "row_bbox": [56.63, 108.12, 554.53, 117.12]
+    },
+    {
+      "metric": "revenue", "value": "26974", "base_value": "26974000000",
+      "raw_value": "26,974", "period_kind": "duration", "period_end": "2023-01-29", "period_start": null,
+      "pdf_page": 150, "printed_page": "50", "table": "Consolidated Statements of Income",
+      "row": "Revenue", "column": "Jan 29, 2023", "scale_header": "(In millions, except per share data)",
+      "row_bbox": [56.63, 108.12, 554.53, 117.12]
+    },
+    {
+      "metric": "operating_income", "value": "32972", "base_value": "32972000000",
+      "raw_value": "32,972", "period_kind": "duration", "period_end": "2024-01-28", "period_start": null,
+      "pdf_page": 150, "printed_page": "50", "table": "Consolidated Statements of Income",
+      "row": "Operating income", "column": "Jan 28, 2024", "scale_header": "(In millions, except per share data)",
+      "row_bbox": [56.63, 222.12, 554.53, 231.12]
+    },
+    {
+      "metric": "net_income", "value": "29760", "base_value": "29760000000",
+      "raw_value": "29,760", "period_kind": "duration", "period_end": "2024-01-28", "period_start": null,
+      "pdf_page": 150, "printed_page": "50", "table": "Consolidated Statements of Income",
+      "row": "Net income", "column": "Jan 28, 2024", "scale_header": "(In millions, except per share data)",
+      "row_bbox": [56.63, 321.87, 554.53, 330.87]
+    },
+    {
+      "metric": "current_assets", "value": "44345", "base_value": "44345000000",
+      "raw_value": "44,345", "period_kind": "instant", "period_end": "2024-01-28", "period_start": null,
+      "pdf_page": 152, "printed_page": "52", "table": "Consolidated Balance Sheets",
+      "row": "Total current assets", "column": "Jan 28, 2024", "scale_header": "(In millions, except par value)",
+      "row_bbox": [53.25, 193.62, 557.90, 202.62]
+    },
+    {
+      "metric": "current_liabilities", "value": "10631", "base_value": "10631000000",
+      "raw_value": "10,631", "period_kind": "instant", "period_end": "2024-01-28", "period_start": null,
+      "pdf_page": 152, "printed_page": "52", "table": "Consolidated Balance Sheets",
+      "row": "Total current liabilities", "column": "Jan 28, 2024", "scale_header": "(In millions, except par value)",
+      "row_bbox": [53.25, 394.62, 557.90, 403.62]
+    }
+  ]
+}

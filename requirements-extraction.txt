@@ -1,0 +1,4 @@
+# Minimal milestone environment; matches the approved existing requirements.
+pdfplumber==0.11.6
+pydantic==2.11.7
+pytest==8.4.1

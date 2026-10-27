@@ -1,0 +1,15 @@
+{
+  "label_basis": "Manually checked on rendered official source pages. Relevance unit is the canonical source PDF page; this is a small development fixture, not a research benchmark. No page filters are used during evaluation.",
+  "queries": [
+    {"id": "income-revenue-current", "query": "In the consolidated income statement, what revenue is reported for the year ended January 28, 2024?", "relevant_pages": [150], "source_anchor": "Revenue"},
+    {"id": "income-revenue-prior", "query": "What comparative revenue appears for January 29, 2023 in the consolidated statements of income?", "relevant_pages": [150], "source_anchor": "Revenue"},
+    {"id": "income-operating", "query": "Where does the consolidated income statement report operating income for fiscal 2024?", "relevant_pages": [150], "source_anchor": "Operating income"},
+    {"id": "income-net", "query": "What is net income for fiscal 2024 in the consolidated statements of income?", "relevant_pages": [150], "source_anchor": "Net income"},
+    {"id": "balance-assets", "query": "In the consolidated balance sheet, what are total current assets as of January 28, 2024?", "relevant_pages": [152], "source_anchor": "Total current assets"},
+    {"id": "balance-liabilities", "query": "What total current liabilities are shown in the consolidated balance sheets at January 28, 2024?", "relevant_pages": [152], "source_anchor": "Total current liabilities"},
+    {"id": "calendar", "query": "What is the fiscal year calendar policy and were fiscal years 2024, 2023 and 2022 52-week years?", "relevant_pages": [155], "source_anchor": "Fiscal Year"},
+    {"id": "functional-currency", "query": "Under foreign currency remeasurement, what functional currency is used for the subsidiaries?", "relevant_pages": [157], "source_anchor": "Foreign Currency Remeasurement"},
+    {"id": "recognition", "query": "What are the revenue recognition steps and when is product sales revenue recognized upon transfer of control?", "relevant_pages": [155], "source_anchor": "Product Sales Revenue"},
+    {"id": "operating-cash", "query": "Where do the consolidated statements of cash flows show net cash provided by operating activities for fiscal 2024?", "relevant_pages": [154], "source_anchor": "Net cash provided by operating activities"}
+  ]
+}

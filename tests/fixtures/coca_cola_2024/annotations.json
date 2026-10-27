@@ -1,0 +1,14 @@
+{
+  "document":{"title":"The Coca-Cola Company FY2024 Form 10-K","entity":"The Coca-Cola Company","source_url":"https://investors.coca-colacompany.com/_assets/_7083339f2d7f4eaeaf900ef76897f80e/cocacolacompany/db/1007/11020/document/2024_10-K_%28Bookmarked%29.pdf","sha256":"96da013cf58c651ae82253c926bfe5bbd1ae63fbcdd4da03efaecf363da11963","byte_length":1354777,"pdf_page_count":140},
+  "annotation_method":"Manually checked rendered official PDF statements (64,66) and explicit USD presentation (23). Consolidated net income includes noncontrolling interests, consistently with consolidated revenue. Test-only ground truth.",
+  "currency":"USD","unit":"currency","scale":1000000,
+  "current_start":"2024-01-01","prior_start":"2023-01-01",
+  "values":[
+    {"metric":"revenue","value":"47061","period_end":"2024-12-31","pdf_page":64,"printed_page":"62","row":"Net Operating Revenues"},
+    {"metric":"revenue","value":"45754","period_end":"2023-12-31","pdf_page":64,"printed_page":"62","row":"Net Operating Revenues"},
+    {"metric":"operating_income","value":"9992","period_end":"2024-12-31","pdf_page":64,"printed_page":"62","row":"Operating Income"},
+    {"metric":"net_income","value":"10649","period_end":"2024-12-31","pdf_page":64,"printed_page":"62","row":"Consolidated Net Income"},
+    {"metric":"current_assets","value":"25997","period_end":"2024-12-31","pdf_page":66,"printed_page":"64","row":"Total Current Assets"},
+    {"metric":"current_liabilities","value":"25249","period_end":"2024-12-31","pdf_page":66,"printed_page":"64","row":"Total Current Liabilities"}
+  ]
+}

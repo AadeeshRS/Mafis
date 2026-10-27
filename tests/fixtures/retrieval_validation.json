@@ -1,0 +1,19 @@
+{
+ "label_basis":"Separate validation queries for new reports. Manually inspected original source tables and currency/fiscal policy pages; no page filters supplied to inference. Not the original NVIDIA development set.",
+ "apple_2024":{"queries":[
+  {"id":"apple-sales","query":"What total net sales are reported in the consolidated statement of operations for 2024 and 2023?","relevant_pages":[32],"source_anchor":"Total net sales","printed_pages":{"32":"29"}},
+  {"id":"apple-operating","query":"Where is operating income in the consolidated statements of operations for fiscal 2024?","relevant_pages":[32],"source_anchor":"Operating income","printed_pages":{"32":"29"}},
+  {"id":"apple-net","query":"Where is the consolidated annual net income reported?","relevant_pages":[32],"source_anchor":"Net income","printed_pages":{"32":"29"}},
+  {"id":"apple-assets","query":"What total current assets appear in the consolidated balance sheets at September 28, 2024?","relevant_pages":[34],"source_anchor":"Total current assets","printed_pages":{"34":"31"}},
+  {"id":"apple-liabilities","query":"What total current liabilities appear in the consolidated balance sheets?","relevant_pages":[34],"source_anchor":"Total current liabilities","printed_pages":{"34":"31"}},
+  {"id":"apple-calendar","query":"What is the fiscal year policy and which year has 53 weeks?","relevant_pages":[37],"source_anchor":"fiscal year is the 52- or 53-week period","printed_pages":{"37":"34"}}
+ ]},
+ "coca_cola_2024":{"queries":[
+  {"id":"coke-revenue","query":"What net operating revenues are reported for 2024 and 2023 in the consolidated income statement?","relevant_pages":[64],"source_anchor":"Net Operating Revenues","printed_pages":{"64":"62"}},
+  {"id":"coke-operating","query":"Where is operating income reported in the consolidated statements of income?","relevant_pages":[64],"source_anchor":"Operating Income","printed_pages":{"64":"62"}},
+  {"id":"coke-net","query":"What consolidated net income is reported before income attributable to noncontrolling interests?","relevant_pages":[64],"source_anchor":"Consolidated Net Income","printed_pages":{"64":"62"}},
+  {"id":"coke-assets","query":"Where are total current assets in the consolidated balance sheets for December 31, 2024?","relevant_pages":[66],"source_anchor":"Total Current Assets","printed_pages":{"66":"64"}},
+  {"id":"coke-liabilities","query":"What total current liabilities are reported at December 31?","relevant_pages":[66],"source_anchor":"Total Current Liabilities","printed_pages":{"66":"64"}},
+  {"id":"coke-currency","query":"In what currency are the consolidated financial statements presented?","relevant_pages":[23],"source_anchor":"financial statements are presented in U.S. dollars","printed_pages":{"23":"21"}}
+ ]}
+}
