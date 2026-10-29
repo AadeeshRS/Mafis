@@ -6,17 +6,90 @@ Bull, Bear, Critic, Report) coordinated through LangGraph, sharing state
 through a single append-only Shared Memory object, with deterministic Python
 for all arithmetic and a capped (max 1) targeted re-analysis loop.
 
-This checkout implements the **Phase 1 offline MVP**, including the final
+The original **Phase 1 offline MVP** includes the final
 three-report acceptance batch: source-grounded extraction, append-only Shared Memory,
 deterministic calculations, shared Chroma retrieval, a Gemini-compatible Document
 and Financial Agent, a minimal Planner, LangGraph, and a two-stage report process.
-The full flow and executable single-LLM comparator use real NVIDIA, Apple, and
+The original flow and executable single-LLM comparator use real NVIDIA, Apple, and
 Coca-Cola FY2024 PDFs with mocked Gemini responses. Real local semantic retrieval
 is measured separately. Live Gemini quality and empirical model comparison remain
-unvalidated because project free-tier quota/billing could not be established.
+unvalidated after historical HTTP 504 failures and a closeout comparator HTTP 503. The closeout shared ledger halted after one of twelve authorized attempts; no live pair completed. Free-tier status is a user
+attestation, not an independently observed billing state.
 See the [Phase 1 acceptance report](useful_md_files/phase1-acceptance.md) for actual
-measurements, failures, and the remaining acceptance conditions. Later-phase agents
-remain planned; the four-phase architecture is unchanged.
+measurements, failures, and the remaining acceptance conditions. Batch 2 adds an
+opt-in full flow; the four-phase architecture is unchanged.
+
+## Full flow (Batch 2)
+
+`run_full_pipeline` / `build_full_graph` add constrained Bull/Bear interpretations,
+mechanical Critic checks, one Planner-owned targeted correction and final reporting.
+`run_pipeline` and `run_extended_pipeline` preserve their earlier scope. The CLI
+accepts `--full` or `--extended`, never both. Generation is disabled by default.
+Full live mode requires an explicit free-tier attestation and one shared capped
+transport-attempt budget; offline demonstrations never enable it.
+
+The full flow verifies primitives before calculating, verifies Financial/dated
+Market findings before Risk, and evaluates the factual Health Gate before spending
+adversarial calls. Bull and Bear receive the same checked snapshot. Their admitted
+outputs select bounded qualified interpretations and exact structured premises;
+they cannot add arbitrary prose facts or numerical reasoning. Argument verification
+means traceability/constraint checking, not proof that an interpretation is true.
+Critic compares dimensions, scale-normalized numbers, citations and explicit
+predicates. It does not detect unrestricted language contradictions. Compatible
+positive and cautionary views may both survive.
+
+Planner coalesces gate, evidence-gap and Critic requests into one correction pass.
+Actual dependency closure chooses the rerun scope; ingestion is never restarted.
+Stable logical identities preserve versions, artifacts and findings. Persistent
+failures terminate with a supported partial report. Gate evaluations refresh after
+argument revisions without changing the threshold or erasing upstream failures.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.batch2_demo
+.\.venv\Scripts\python.exe -m evaluation.batch2 --output output/batch2/evaluation_reproduce
+.\.venv\Scripts\python.exe -m evaluation.mechanisms
+```
+
+The demonstration uses actual PDFs, shared Chroma/MiniLM retrieval, an official
+dated Fed snapshot and explicit offline model doubles. The evaluation command
+defaults to test hash embeddings; add `--real-embeddings` for MiniLM. Mock numerical
+success is harness validation, not evidence of live model quality or superiority.
+Market/Risk remain deterministic quotation/topic screens with explicit causal and
+coverage limitations. Live experiments, expanded independent annotations and blind
+human ratings remain separate scientific acceptance work. See
+[evaluation instructions](evaluation/README.md).
+
+## Closeout execution and scope
+
+Report section membership is recomputed from current eligible memory, including
+Sources and Support. Swapped stances, missing eligible entries and fabricated
+exclusions cannot produce a validated success. Numeric argument premises accept
+finite exact Decimals; malformed/nonfinite output returns an explicit model-output
+failure and follows the existing single Planner retry.
+
+The PDF profile supports wrapped/shared date headers, ordered ascending or descending
+year columns, singular statement headings, reported operating-income aliases and
+dotted leaders. Native glyphs replace a duplicate tagged OCR overlay when present;
+no OCR or guessed glyph decoding was added. PDF page numbers are authoritative;
+unknown printed footers remain `None`. Explicit source-backed reporting currency
+is required. See [measured closeout results](evaluation/results.md) for per-document
+coverage, reclassified development cases and remaining failures.
+
+```powershell
+.\.venv\Scripts\python.exe -m evaluation.source_coverage --output output/final_closeout/source_coverage_reproduce.json
+.\.venv\Scripts\python.exe -m evaluation.batch2 --cases tests/fixtures/batch2_cases.json --split all --real-embeddings --output output/final_closeout/offline_reproduce
+.\.venv\Scripts\python.exe -m scripts.batch2_demo --cases tests/fixtures/batch2_cases.json --case-ids nvidia_2024 apple_2024 coca_cola_2024 amd_2024 --output output/final_closeout/demo_reproduce
+$closeoutTestTemp = Join-Path (Get-Location) ("output/final_closeout/pytest_" + [guid]::NewGuid().ToString("N"))
+.\.venv\Scripts\python.exe -m pytest -q --basetemp $closeoutTestTemp
+```
+
+The all-split harness retains blocked/unannotated cases as failed records and exits
+nonzero when any exist; inspect `results.json` rather than dropping those cases.
+The baseline and full arm share a pre-inference evidence bundle and dated macro
+pool. Full agents make additional scoped retrieval calls: this is comparable
+source access, not identical role contexts. SDK manifests separate genuine live,
+injected SDK tests, mocks, failed attempts and unknown adapters. Usage comes only
+from the current condition; missing usage/billing remains unknown.
 
 ## Run the focused milestone tests
 
@@ -154,7 +227,8 @@ against the exact stored claim versions before accepting a detached immutable
 snapshot. Duplicate IDs and altered or dangling artifacts are rejected.
 `get_calculation`, `get_calculations`, and `get_calculation_freshness` expose
 history. Freshness is `current` or `superseded`; later claim revisions never rewrite
-old artifacts. Full dependency invalidation remains planned.
+old artifacts. Full mode follows these exact dependencies for its single targeted
+correction; historical artifacts remain immutable.
 
 The three real-PDF integrations cover all four operations with an independent
 rational-number oracle. The engine has no model calls, forecasting, or advanced
@@ -236,6 +310,32 @@ validates constrained model interpretations against its artifacts. The report
 renderer consumes a validated Analysis Map; it adds no free-form model numbers.
 Final validation resolves source content, current claim versions, and exact
 calculation inputs. Pending independent verification is always disclosed.
+
+## Batch 1 verification reliability
+
+Independent checks require a supported claim shape as well as evidence. Structured
+numbers belong in raw source-cell primitives or engine-backed derived metrics.
+Document quotations, dated Market descriptions and conditional Risk hypotheses
+cannot smuggle a structured value or numerical units/scale through a quotation
+check. Numbers inside quoted text remain valid text. Legacy records remain
+readable, but unsupported shapes cannot acquire checked eligibility.
+
+Extended reports require the latest authoritative Health Gate evaluation retained
+in their own Shared Memory run. Its threshold, original upstream issues and exact
+current claim versions are pinned independently of the caller's Analysis Map.
+Changed, missing, cross-run or stale gate metadata is rejected. Rebuilding a map
+after revisions evaluates current state using the retained policy and original
+issues; blocked reports retain their limitations. Phase 1 reports remain compatible.
+`get_unresolved()` uses the same recursive checked eligibility as the gate,
+including missing check records and stale dependencies/calculation inputs.
+
+Default root-level pytest discovery is restricted to `tests/` by `pytest.ini`;
+generated outputs are not collected. For an offline run with a fresh local TEMP:
+
+```powershell
+$mafisFixTemp = Join-Path (Get-Location) ('output/review_fix_' + [guid]::NewGuid().ToString('N'))
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=$mafisFixTemp --tb=short
+```
 
 ## Layout
 

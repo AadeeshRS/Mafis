@@ -10,21 +10,27 @@ from __future__ import annotations
 
 from collections import Counter
 from typing import Literal
+from uuid import uuid4
 
+from pydantic import Field
+from agents.contracts import AgentIssue
 from memory.shared_memory import AgentName, ClaimVersionRef, EvidenceModel, SharedMemory
 
 
 class GateResult(EvidenceModel):
+    evaluation_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    claim_refs: tuple[ClaimVersionRef, ...]
     decision: Literal["passed", "blocked"]
-    total: int
-    verified_count: int
-    unsupported_count: int
-    flagged_count: int
-    pending_count: int
-    unresolved_count: int
-    stale_count: int
-    unsupported_rate: float
-    threshold: float
+    total: int = Field(ge=0, strict=True)
+    verified_count: int = Field(ge=0, strict=True)
+    unsupported_count: int = Field(ge=0, strict=True)
+    flagged_count: int = Field(ge=0, strict=True)
+    pending_count: int = Field(ge=0, strict=True)
+    unresolved_count: int = Field(ge=0, strict=True)
+    stale_count: int = Field(ge=0, strict=True)
+    unsupported_rate: float = Field(ge=0, le=1, allow_inf_nan=False, strict=True)
+    threshold: float = Field(ge=0, le=1, allow_inf_nan=False, strict=True)
     failing_claim_refs: tuple[ClaimVersionRef, ...] = ()
     failure_types: tuple[str, ...] = ()
     reanalysis_scope: tuple[AgentName, ...] = ()
@@ -38,6 +44,33 @@ class VerificationHealthGate:
         self.memory, self.threshold = memory, float(unsupported_threshold)
 
     def evaluate(self, *, issues=()) -> GateResult:
+        # Revalidate even model_copy/model_construct inputs before pinning policy.
+        issues = tuple(AgentIssue.model_validate(i.model_dump(round_trip=True) if isinstance(i, AgentIssue) else i)
+                       for i in issues)
+        result = self._evaluate(issues=issues, evaluation_id="gate:" + str(uuid4()))
+        self.memory._record_health_gate(result, issues)
+        return result
+
+    def validate_result(self, result: GateResult) -> tuple[AgentIssue, ...]:
+        """Check against stored policy/issues and current run, never map policy."""
+        if not isinstance(result, GateResult):
+            raise ValueError("Extended reports require authoritative Health Gate metadata")
+        supplied = GateResult.model_validate(result.model_dump(round_trip=True))
+        context = self.memory.get_health_gate_context()
+        if context is None:
+            raise ValueError("No authoritative Health Gate evaluation for this run")
+        original = GateResult.model_validate(context["result"])
+        issues = tuple(AgentIssue.model_validate(i) for i in context["issues"])
+        if supplied != original:
+            raise ValueError("Health Gate metadata differs from the authoritative run evaluation")
+        expected = VerificationHealthGate(self.memory, original.threshold)._evaluate(
+            issues=issues, evaluation_id=original.evaluation_id)
+        if supplied != expected:
+            raise ValueError("Health Gate run/version snapshot is stale")
+        return issues
+
+    def _evaluate(self, *, issues, evaluation_id: str) -> GateResult:
+        """Pure evaluation also used for validation and aggregate read helpers."""
         claims = [c for c in self.memory.get_claims() if c.claim_type != "argument"]
         counts = Counter(c.verification_status for c in claims)
         failures, types, scope, stale_count = [], [], [], 0
@@ -95,7 +128,9 @@ class VerificationHealthGate:
             "Upstream evidence collection or analysis reported incomplete results" if issues else
             "Current ineligible claim rate exceeds threshold" if blocked else
             "Current ineligible claim rate is at or below threshold")
-        return GateResult(decision="blocked" if blocked else "passed", total=total,
+        return GateResult(evaluation_id=evaluation_id, run_id=self.memory.run_id,
+            claim_refs=tuple(self.memory.reference(c.claim_id) for c in self.memory.get_claims()),
+            decision="blocked" if blocked else "passed", total=total,
             verified_count=total-len(failures), unsupported_count=counts["unsupported"],
             flagged_count=counts["flagged"], pending_count=counts["pending"], unresolved_count=counts["unresolved"],
             stale_count=stale_count, unsupported_rate=rate, threshold=self.threshold,

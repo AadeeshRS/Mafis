@@ -63,4 +63,19 @@ This phase should not turn MAFIS into a long debate system. The purpose is contr
 
 ## Design Notes
 
+Batch 2 implements the opt-in `run_full_pipeline` graph, bounded structured
+Bull/Bear interpretations, exact-premise traceability checks, separate append-only
+Critic findings and one Planner-owned targeted correction. Earlier entry points
+retain their scope. Mechanical Critic coverage is limited to compatible identities,
+dimensions, exact source identities and explicit predicates; it does not perform
+unrestricted language contradiction detection. No detected finding does not establish
+universal consistency. Offline doubles and actual PDFs exercise these mechanics;
+live interpretive quality remains unvalidated.
+
 The purpose of Bull/Bear is not to determine a winning investment recommendation. They are adversarial analytical views over the same evidence base. The Critic is a quality-control layer, not a judge that arbitrarily chooses whichever narrative sounds stronger.
+
+
+Closeout regressions additionally enforce authoritative section membership and
+normal rejection of malformed argument numeric snapshots. Those failures use the
+same Planner-owned retry budget and terminal partial-report path; no repair call
+or retry budget was added to argument generators.

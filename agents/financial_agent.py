@@ -49,8 +49,9 @@ _DESCRIPTIONS = {
 
 
 class FinancialAgent:
-    def __init__(self, memory: SharedMemory, llm, *, engine=None):
+    def __init__(self, memory: SharedMemory, llm, *, engine=None, stable_ids=False, run_iteration=0):
         self.memory, self.llm = memory, llm
+        self.stable_ids, self.run_iteration = stable_ids, run_iteration
         self.engine = engine if engine is not None else FinancialEngine(memory)
         if self.engine.memory is not memory:
             raise ValueError("Financial Agent and engine must share one run store")
@@ -109,12 +110,20 @@ class FinancialAgent:
         if interpretation.calculation_ref != calculation_ref or interpretation.label != self._expected_label(artifact):
             raise ModelOutputError("Interpretation contradicts the referenced deterministic result")
         suffix = "%" if artifact.output_unit == "percent" else ""
-        claim = Claim(claim_id="derived:" + calculation_ref, agent="FinancialAgent", claim_type="derived_metric",
+        identifier = f"financial:{artifact.entity}:{artifact.operation}:{artifact.output_period.end_date}" if self.stable_ids else "derived:" + calculation_ref
+        claim = Claim(claim_id=identifier, agent="FinancialAgent", claim_type="derived_metric",
             entity=artifact.entity, accounting_scope=artifact.accounting_scope, metric=artifact.operation,
             value=artifact.output_value, unit=artifact.output_unit, scale=1, period=artifact.output_period,
             claim=f"{artifact.operation.replace('_', ' ').capitalize()}: {artifact.display_value}{suffix}. "
                   + self.interpretation_text(artifact), calculation_ref=calculation_ref,
-            support_level="calculation_backed", verification_status="pending")
+            support_level="calculation_backed", verification_status="pending", run_iteration=self.run_iteration)
+        if self.stable_ids:
+            try:
+                current = self.memory.get_current(identifier)
+            except KeyError:
+                pass
+            else:
+                claim = claim.model_copy(update={"version":current.version+1})
         return self.memory.append(claim)
 
     def analyze(self, query: str, *, operations: tuple[CalculationOperation, ...],
@@ -140,6 +149,15 @@ class FinancialAgent:
         for operation in plan.operations:
             try:
                 request = self.request_calculation(ids, operation, target_year=target_year)
+                reusable = next((a for a in reversed(self.memory.get_calculations())
+                    if self.stable_ids and a.operation == operation
+                    and {i.role:i.claim_ref for i in a.inputs} == request.inputs
+                    and self.memory.get_calculation_freshness(a.calculation_ref) == "current"), None)
+                if reusable is not None:
+                    calculations.append(reusable.calculation_ref)
+                    claim = self.interpret_result(reusable.calculation_ref)
+                    references.append(self.memory.reference(claim.claim_id))
+                    continue
                 result = self.engine.calculate(request)
                 if result.status != "success":
                     issues.append(AgentIssue(code="calculation_rejected",

@@ -164,6 +164,7 @@ class Claim(EvidenceModel):
     )
     supports_claim_ids: tuple[str, ...] = ()
     candidate_claim_refs: tuple[ClaimVersionRef, ...] = ()
+    argument: ArgumentContent | None = None
     support_level: SupportLevel
     verification_status: VerificationStatus = "pending"
     version: int = Field(default=1, ge=1, description="Increments on every revision")
@@ -210,6 +211,43 @@ class Claim(EvidenceModel):
         if not isinstance(self.value, Decimal):
             raise ValueError("This claim is not numeric")
         return self.value * self.scale
+
+    def verification_shape_error(self) -> str | None:
+        """Implemented check shapes, stricter than legacy storage acceptance.
+
+        Numbers inside a quotation are text. A structured value (including a
+        numeric string) or numerical dimensions must never ride that quote's
+        verification. Unsupported historical shapes remain stored unchanged.
+        """
+        if self.claim_type in ("raw_primitive", "derived_metric"):
+            if not isinstance(self.value, Decimal) or not self.metric or self.period is None:
+                return "Numeric claims require a structured Decimal value, metric and period"
+            if self.claim_type == "raw_primitive":
+                if (self.agent != "DocumentAgent" or self.unit != "currency" or not self.currency
+                        or self.accounting_scope is None):
+                    return "Implemented raw primitives require Document source-cell monetary dimensions"
+            elif self.agent != "FinancialAgent" or not self.calculation_ref:
+                return "Implemented derived metrics require Financial deterministic artifacts"
+            return None
+        if self.claim_type == "argument":
+            if (self.agent not in ("Bull", "Bear") or self.argument is None or self.value is not None
+                    or self.unit is not None or self.currency is not None or self.scale != 1
+                    or self.calculation_ref or self.evidence or self.supports_claim_ids):
+                return "Only constrained Bull/Bear interpretations with exact factual premises are supported"
+            return None
+        if self.argument is not None:
+            return "Factual claims cannot carry argument interpretations"
+        if self.value is not None or self.unit is not None or self.currency is not None or self.scale != 1:
+            return "Narrative claims cannot carry structured values, units, currencies or non-unit scales"
+        if self.claim_type == "qualitative":
+            if self.calculation_ref or self.accounting_scope is not None:
+                return "Qualitative quotations cannot carry calculation or accounting dimensions"
+            if self.agent == "DocumentAgent":
+                if self.period is not None or self.metric not in (None, "source_statement"):
+                    return "Document quotations require the non-numeric source-statement shape"
+            elif self.agent != "MarketAgent":
+                return "Only Document quotations and canonical Market descriptions are implemented"
+        return None
 
 
 def _require_identifier(value: str, name: str) -> str:
@@ -271,7 +309,89 @@ class VerificationRecord(EvidenceModel):
         return self
 
 
-# Resolve Claim's forward reference without changing the extraction DTO layout.
+class ArgumentPremise(EvidenceModel):
+    claim_ref: ClaimVersionRef
+    entity: str | None
+    metric: str | None
+    value: Decimal | str | None
+    period: FiscalPeriod | None
+    unit: str | None
+    currency: str | None
+    scale: int
+    accounting_scope: Literal["consolidated", "standalone"] | None
+    calculation_ref: str | None
+    source_ids: tuple[str, ...] = ()
+    quotations: tuple[str, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def numeric_snapshot(cls, data):
+        if isinstance(data, dict) and data.get("unit") in ("currency", "percent", "ratio") and data.get("value") is not None:
+            data = dict(data)
+            value=data["value"]
+            if isinstance(value,bool) or not isinstance(value,(str,int,float,Decimal)):
+                raise ValueError("Numeric argument premise requires a finite decimal value")
+            try:
+                number=Decimal(str(value))
+            except InvalidOperation as exc:
+                raise ValueError("Numeric argument premise is not a number") from exc
+            if not number.is_finite():
+                raise ValueError("Numeric argument premise must be finite")
+            data["value"] = number
+        return data
+
+
+class ArgumentContent(EvidenceModel):
+    stance: Literal["bull", "bear"]
+    interpretation: Literal["strength", "resilience", "caution", "uncertainty"]
+    premises: tuple[ArgumentPremise, ...] = Field(min_length=1)
+    counterevidence: tuple[ClaimVersionRef, ...] = ()
+    qualifications: tuple[Literal["historical_only", "not_causal", "not_recommendation", "coverage_limited"], ...]
+    snapshot_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class ContradictionRecord(EvidenceModel):
+    finding_id: str = Field(min_length=1)
+    category: Literal["numerical", "temporal", "unit", "source", "logical", "causal", "risk_interpretation", "missing_evidence"]
+    rule: str
+    description: str
+    claim_refs: tuple[ClaimVersionRef, ...]
+    original_refs: tuple[ClaimVersionRef, ...]
+    components: tuple[AgentName, ...]
+    root_cause: str
+    missing_evidence: tuple[str, ...] = ()
+    recommended_scope: tuple[AgentName, ...] = ()
+    status: Literal["open", "resolved", "unresolved"] = "open"
+    explanation: str | None = None
+    version: int = Field(default=1, ge=1)
+    run_iteration: int = Field(default=0, ge=0, le=1)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ReanalysisRequest(EvidenceModel):
+    trigger: Literal["health_gate", "evidence_gap", "critic"]
+    affected_refs: tuple[ClaimVersionRef, ...] = ()
+    components: tuple[AgentName, ...]
+    failure_types: tuple[str, ...]
+    correction: tuple[str, ...]
+    metrics: tuple[str, ...] = ()
+    operations: tuple[str, ...] = ()
+    retryable: bool = True
+
+
+class RetryDecision(EvidenceModel):
+    decision_id: str
+    requests: tuple[ReanalysisRequest, ...]
+    affected_refs: tuple[ClaimVersionRef, ...]
+    rerun_nodes: tuple[str, ...]
+    operations: tuple[str, ...] = ()
+    metrics: tuple[str, ...] = ()
+    budget_before: int = Field(ge=0, le=1)
+    budget_after: int = Field(ge=0, le=1)
+    outcome: Literal["executed", "skipped", "unresolved"]
+    reason: str
+
+
 Claim.model_rebuild()
 
 
@@ -359,6 +479,10 @@ class SharedMemory:
         self._support_refs: dict[tuple[str, int], tuple[ClaimVersionRef, ...]] = {}
         self._calculations: dict[str, str] = {}
         self._verifications: tuple[str, ...] = ()
+        self._health_gate_contexts: tuple[str, ...] = ()
+        self._contradictions: dict[str, tuple[str, ...]] = {}
+        self._retry_decisions: tuple[str, ...] = ()
+        self._retry_remaining = 1
 
     @property
     def run_id(self) -> str:
@@ -532,6 +656,14 @@ class SharedMemory:
         if claim_id in _seen:
             return False
         claim = self.get_current(claim_id)
+        if claim.verification_shape_error() is not None:
+            return False
+        if claim.claim_type == "argument":
+            try:
+                from agents.argument_contracts import validate_argument
+                validate_argument(claim, self)
+            except (ValueError, KeyError, TypeError):
+                return False
         records = self.get_verification_records(claim_id)
         if (claim.verification_status != "verified" or not records
                 or records[-1].outcome != "verified" or records[-1].resulting_ref != self.reference(claim_id)):
@@ -547,6 +679,59 @@ class SharedMemory:
             if any(not self.is_current_verified(i.claim_ref.claim_id, seen) for i in artifact.inputs):
                 return False
         return True
+
+    def _record_health_gate(self, result, issues) -> None:
+        """Retain detached gate policy and upstream issues within this run only."""
+        self._health_gate_contexts += (json.dumps({
+            "result": result.model_dump(mode="json"),
+            "issues": [issue.model_dump(mode="json") for issue in issues],
+        }, allow_nan=False),)
+
+    def get_health_gate_context(self) -> dict[str, Any] | None:
+        """Detached latest authoritative gate evaluation, never caller map data."""
+        return json.loads(self._health_gate_contexts[-1]) if self._health_gate_contexts else None
+
+    def get_health_gate_history(self) -> list[dict[str, Any]]:
+        return [json.loads(item) for item in self._health_gate_contexts]
+
+    @property
+    def retry_budget_remaining(self) -> int:
+        return self._retry_remaining
+
+    def _record_retry_decision(self, decision: RetryDecision) -> RetryDecision:
+        accepted = RetryDecision.model_validate(decision.model_dump(round_trip=True))
+        if accepted.budget_before != self._retry_remaining:
+            raise ValueError("Retry decision does not match the run's global budget")
+        expected = self._retry_remaining - (accepted.outcome == "executed")
+        if expected < 0 or accepted.budget_after != expected:
+            raise ValueError("Exactly one global analytical retry is permitted")
+        for ref in accepted.affected_refs:
+            self.resolve(ref)
+        self._retry_remaining = expected
+        self._retry_decisions += (accepted.model_dump_json(),)
+        return RetryDecision.model_validate_json(self._retry_decisions[-1])
+
+    def get_retry_decisions(self) -> list[RetryDecision]:
+        return [RetryDecision.model_validate_json(item) for item in self._retry_decisions]
+
+    def append_contradiction(self, finding: ContradictionRecord) -> ContradictionRecord:
+        accepted = ContradictionRecord.model_validate(finding.model_dump(round_trip=True))
+        history = self._contradictions.get(accepted.finding_id, ())
+        if accepted.version != len(history) + 1 or accepted.timestamp.utcoffset() is None:
+            raise ValueError("Finding versions must be consecutive with aware timestamps")
+        for ref in accepted.claim_refs + accepted.original_refs:
+            self.resolve(ref)
+        if history:
+            previous = ContradictionRecord.model_validate_json(history[-1])
+            if (accepted.original_refs != previous.original_refs or accepted.rule != previous.rule
+                    or accepted.run_iteration < previous.run_iteration):
+                raise ValueError("Finding revision cannot erase its origin or rule")
+        self._contradictions[accepted.finding_id] = history + (accepted.model_dump_json(),)
+        return ContradictionRecord.model_validate_json(self._contradictions[accepted.finding_id][-1])
+
+    def get_contradictions(self, *, history: bool = False) -> list[ContradictionRecord]:
+        return [ContradictionRecord.model_validate_json(item)
+                for records in self._contradictions.values() for item in (records if history else records[-1:])]
 
     def get_claim(self, claim_id: str, version: int | None = None) -> Claim:
         """Read an exact version, or the current version when omitted.
@@ -664,7 +849,7 @@ class SharedMemory:
             Dict with total, unsupported_count, contradicted_count, unsupported_rate.
         """
         from agents.verification_gate import VerificationHealthGate
-        result = VerificationHealthGate(self).evaluate()
+        result = VerificationHealthGate(self)._evaluate(issues=(), evaluation_id="summary")
         return {"total": result.total, "verified_count": result.verified_count,
                 "unsupported_count": result.unsupported_count, "contradicted_count": result.flagged_count,
                 "pending_count": result.pending_count, "unresolved_count": result.unresolved_count,
@@ -676,7 +861,5 @@ class SharedMemory:
         Returns:
             Dict of unresolved/unsupported items for the report Limitations section.
         """
-        return {"claims": [c for c in self.get_claims() if c.verification_status != "verified"
-                           or self.get_dependency_freshness(c.claim_id) != "current"
-                           or (c.calculation_ref is not None and self.get_calculation_freshness(c.calculation_ref) != "current")],
-                "contradictions": []}
+        return {"claims": [c for c in self.get_claims() if not self.is_current_verified(c.claim_id)],
+                "contradictions": [f for f in self.get_contradictions() if f.status != "resolved"]}

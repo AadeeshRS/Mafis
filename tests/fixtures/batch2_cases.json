@@ -1,0 +1,219 @@
+{
+  "manifest_version": "1.0",
+  "cases": [
+    {
+      "case_id": "nvidia_2024",
+      "question": "Assess FY2024 financial health, revenue growth, profitability and liquidity",
+      "document": {
+        "path": "tests/fixtures/nvidia_2024/annual_report.pdf",
+        "source_url": "https://s201.q4cdn.com/141608511/files/doc_financials/2024/ar/NVIDIA-2024-Annual-Report.pdf",
+        "title": "NVIDIA FY2024 Annual Report (including Form 10-K)",
+        "entity": "NVIDIA Corporation"
+      },
+      "gold": "tests/fixtures/nvidia_2024/annotations.json",
+      "split": "development",
+      "document_sha256": "b0de35ded9da9463d5c33dce77cf9b2158b88cf666f144646d0cc64af23c5960",
+      "annotation_sha256": "4049cbe46d71e25a598480254d98564d4080ef1248c13bd94b8355978daf6e42"
+    },
+    {
+      "case_id": "apple_2024",
+      "question": "Assess FY2024 financial health, revenue growth, profitability and liquidity",
+      "document": {
+        "path": "tests/fixtures/apple_2024/annual_report.pdf",
+        "source_url": "https://s2.q4cdn.com/470004039/files/doc_earnings/2024/q4/filing/10-Q4-2024-As-Filed.pdf",
+        "title": "Apple Inc. FY2024 Form 10-K",
+        "entity": "Apple Inc."
+      },
+      "gold": "tests/fixtures/apple_2024/annotations.json",
+      "split": "development",
+      "document_sha256": "319e1217afe72f194575e63350ea6c813eaf5caf0c24e59ce8b221fc1b3ea0d4",
+      "annotation_sha256": "dc5d6787e134540eb08573d6e264ba7e5003398d7193b5e36940f65b1e69c799"
+    },
+    {
+      "case_id": "coca_cola_2024",
+      "question": "Assess FY2024 financial health, revenue growth, profitability and liquidity",
+      "document": {
+        "path": "tests/fixtures/coca_cola_2024/annual_report.pdf",
+        "source_url": "https://investors.coca-colacompany.com/_assets/_7083339f2d7f4eaeaf900ef76897f80e/cocacolacompany/db/1007/11020/document/2024_10-K_%28Bookmarked%29.pdf",
+        "title": "The Coca-Cola Company FY2024 Form 10-K",
+        "entity": "The Coca-Cola Company"
+      },
+      "gold": "tests/fixtures/coca_cola_2024/annotations.json",
+      "split": "development",
+      "document_sha256": "96da013cf58c651ae82253c926bfe5bbd1ae63fbcdd4da03efaecf363da11963",
+      "annotation_sha256": "e90c2b67826ce51b837aefdce6a17404e82bfa73695d4b54fc28c1d5f506d8f0"
+    },
+    {
+      "case_id": "intel_2024",
+      "split": "validation",
+      "document": {
+        "path": "tests/fixtures/intel_2024/annual_report.pdf",
+        "source_url": "https://www.intc.com/filings-reports/all-sec-filings/content/0000050863-25-000052/a2024arsform10-k.pdf",
+        "title": "Intel Corporation FY2024 annual report",
+        "entity": "Intel Corporation"
+      },
+      "gold": "tests/fixtures/intel_2024/annotations_candidate.json",
+      "question": "Assess FY2024 financial health with financial and macro risk, bull, bear and critic",
+      "annotation_ready_for_primary": false,
+      "document_sha256": "5b9ba57e8d6025b2e78ba0e98933d006f1019dfb22f40dc3670826898a7c258d",
+      "annotation_sha256": "56eab2ba9b7daa525a303ccf81e7b724c1d571590a1db5e1d03f3967536760b4"
+    },
+    {
+      "case_id": "microsoft_2024",
+      "split": "validation",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/789019/000119312524242888/d815777dars.pdf",
+      "source_status": "download_failed_or_not_pdf",
+      "attempts": [
+        {
+          "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312524242888/d815777dars.pdf",
+          "http_status": 403
+        }
+      ],
+      "annotation_ready_for_primary": false,
+      "document": null,
+      "gold": null
+    },
+    {
+      "case_id": "walmart_2024",
+      "split": "validation",
+      "document": {
+        "path": "tests/fixtures/walmart_2024/annual_report.pdf",
+        "source_url": "https://corporate.walmart.com/content/dam/corporate/documents/newsroom/2024/04/25/walmart-releases-2024-annual-report-and-proxy-statement/walmart-inc-2024-annual-report.pdf",
+        "title": "Walmart Inc. FY2024 annual report",
+        "entity": "Walmart Inc."
+      },
+      "gold": "tests/fixtures/walmart_2024/annotations_candidate.json",
+      "question": "Assess FY2024 financial health with financial and macro risk, bull, bear and critic",
+      "annotation_ready_for_primary": false,
+      "document_sha256": "68ac2d343b54d80ebde1bc900dcfd6fbee3bc855a18dd0959d37c9592a5144a8",
+      "annotation_sha256": "70f4047efe702f16fd6fd404749797ccfd10252011346789f71a14a452db6b5a"
+    },
+    {
+      "case_id": "alphabet_2024",
+      "split": "test",
+      "source_url": "https://abc.xyz/assets/e1/57/8a65483e43feaa709f6cc5cc0737/annualreport2024-web.pdf",
+      "source_status": "download_failed_or_not_pdf",
+      "attempts": [
+        {
+          "url": "https://abc.xyz/assets/e1/57/8a65483e43feaa709f6cc5cc0737/annualreport2024-web.pdf",
+          "http_status": 403
+        },
+        {
+          "url": "https://abc.xyz/assets/99/21/46cafdba41089a12a2d86ea47d44/goog026-annualreport2024-web.pdf",
+          "http_status": 403
+        }
+      ],
+      "annotation_ready_for_primary": false,
+      "document": null,
+      "gold": null
+    },
+    {
+      "case_id": "nike_2024",
+      "split": "test",
+      "document": {
+        "path": "tests/fixtures/nike_2024/annual_report.pdf",
+        "source_url": "https://investors.nike.com/_assets/_3064c626b80c9d8918cd39931fcf3802/nike/db/950/9329/annual_report/427857-1-_7_Nike-2024-Combo_Form-10-K_WR.pdf",
+        "title": "NIKE, Inc. FY2024 annual report",
+        "entity": "NIKE, Inc."
+      },
+      "gold": "tests/fixtures/nike_2024/annotations_candidate.json",
+      "question": "Assess FY2024 financial health with financial and macro risk, bull, bear and critic",
+      "annotation_ready_for_primary": false,
+      "document_sha256": "ad45136466f5f0806d7b5e8ec87c62dbb1da071cccba0e9cff880e19d40ca43b",
+      "annotation_sha256": "66fb3126f5659c6163199ddfde8d982f53856513af7b627f5d55f5c082491ce2"
+    },
+    {
+      "case_id": "amazon_2024",
+      "split": "development",
+      "document": {
+        "path": "tests/fixtures/amazon_2024/annual_report.pdf",
+        "source_url": "https://s2.q4cdn.com/299287126/files/doc_financials/2025/ar/Amazon-2024-Annual-Report.pdf",
+        "title": "Amazon.com, Inc. FY2024 annual report",
+        "entity": "Amazon.com, Inc."
+      },
+      "gold": "tests/fixtures/amazon_2024/annotations.json",
+      "question": "Assess FY2024 financial health with financial and macro risk, bull, bear and critic",
+      "annotation_ready_for_primary": true,
+      "document_sha256": "d6c8919af431fbf38d5d92f2060ba8f45d084f26495c6f17ce81232102977908",
+      "annotation_sha256": "c7c1f6417608642af2c8297d9509470c7bff61d7823f0985f58c29a051a01667",
+      "original_split": "test",
+      "reclassification_reason": "Closeout parser development from source-inspected shared dates, ascending year columns and singular headings; prior compatibility failures exposed; excluded from untouched held-out claims."
+    },
+    {
+      "case_id": "pepsico_2024",
+      "split": "development",
+      "document": {
+        "path": "tests/fixtures/pepsico_2024/annual_report.pdf",
+        "source_url": "https://www.pepsico.com/docs/pepsico-5v9wci20/media/Files/investors/2024-pepsico-annual-report-01.pdf",
+        "title": "PepsiCo, Inc. FY2024 annual report",
+        "entity": "PepsiCo, Inc."
+      },
+      "gold": "tests/fixtures/pepsico_2024/annotations.json",
+      "question": "Assess FY2024 financial health with financial and macro risk, bull, bear and critic",
+      "annotation_ready_for_primary": true,
+      "document_sha256": "2626c28e287a4137219963f0d1308f18223f5384467ee61da173678b5e1b4c6e",
+      "annotation_sha256": "5a0fcf47eeb9e38e8e53300a0630ed5a0cb9ad799f34424f6ba8106f0990b16c",
+      "original_split": "test",
+      "reclassification_reason": "Closeout parser development from source-inspected shared dates, ascending year columns and singular headings; prior compatibility failures exposed; excluded from untouched held-out claims."
+    },
+    {
+      "case_id": "netflix_2024",
+      "split": "test",
+      "source_url": "https://ir.netflix.net/financials/annual-reports-and-proxies/",
+      "source_status": "download_failed_or_not_pdf",
+      "attempts": [
+        {
+          "url": "https://ir.netflix.net/financials/annual-reports-and-proxies/",
+          "http_status": 403
+        },
+        {
+          "url": "https://s22.q4cdn.com/959853165/files/doc_financials/2024/ar/Netflix-10-K-01272025.pdf",
+          "http_status": 451
+        }
+      ],
+      "annotation_ready_for_primary": false,
+      "document": null,
+      "gold": null
+    },
+    {
+      "case_id": "meta_2024",
+      "split": "development",
+      "document": {
+        "path": "tests/fixtures/meta_2024/annual_report.pdf",
+        "source_url": "https://s21.q4cdn.com/399680738/files/doc_financials/2024/ar/Meta-12-31-2024-10K-ARS.pdf",
+        "title": "Meta Platforms, Inc. FY2024 annual report",
+        "entity": "Meta Platforms, Inc."
+      },
+      "gold": "tests/fixtures/meta_2024/annotations.json",
+      "question": "Assess FY2024 financial health with financial and macro risk, bull, bear and critic",
+      "annotation_ready_for_primary": true,
+      "document_sha256": "9b81ad9b6ecb9e23b1d810b9cecabcad05e00386d24dd64b4cd44a5bab54a13f",
+      "annotation_sha256": "6746d2a077c4249e5027d2d12a4ebf95841e74b207c760e455992cad92d7e010",
+      "original_split": "test",
+      "reclassification_reason": "Closeout parser development from source-inspected shared dates, ascending year columns and singular headings; prior compatibility failures exposed; excluded from untouched held-out claims."
+    },
+    {
+      "case_id": "amd_2024",
+      "split": "validation",
+      "reserve": true,
+      "admission_reason": "Additional issuer source after Microsoft HTTP 403; original 12 assignments/failures retained; reserve assignment frozen before download/inference",
+      "document": {
+        "path": "tests/fixtures/amd_2024/annual_report.pdf",
+        "source_url": "https://ir.amd.com/financial-information/sec-filings/content/0001193125-25-067185/0001193125-25-067185.pdf",
+        "title": "AMD FY2024 annual report",
+        "entity": "Advanced Micro Devices, Inc."
+      },
+      "gold": "tests/fixtures/amd_2024/annotations.json",
+      "question": "Assess FY2024 financial health with financial and macro risk, bull, bear and critic",
+      "document_sha256": "28f3911e60546f90e4d98496f2f111179179ee760602ac2d1e71a313c1334567",
+      "annotation_sha256": "83767a390e74d3b4969fb4cb088b5d50c92bd7ba727c3bd15fa963e1e74f416a",
+      "annotation_ready_for_primary": true,
+      "annotation_method": "AI source-inspected validation gold; human review pending"
+    }
+  ],
+  "note": "Original 12-slot inventory retained plus one frozen reserve validation source. Ten actual official PDFs, three download failures. New source-inspected candidate annotations retain ambiguities and are not human-reviewed. No live/held-out model-quality evaluation or extractor tuning. Offline extraction-profile probes are recorded separately.",
+  "held_out_evaluated": false,
+  "split_configuration_sha256": "7d210cc5e58e74b69601dfa015087c87c56a22ae595b00752321278b2277ab46",
+  "parent_split_configuration_sha256": "6a745cc3d82466b88ffd291afae09ea4b978740c4857560189b0d3beb3406ec4",
+  "closeout_exposure": "Original compatibility probes exposed all candidate layouts before closeout. Parser changes used validation Intel/Walmart/AMD only; test compatibility rerun after implementation freeze, not untouched zero-exposure data."
+}

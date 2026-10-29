@@ -2,6 +2,14 @@
 
 ## Goal
 
+Batch 2 supplies executable offline conditions, pairing checks, injected-error
+metrics, source inventory/acquisition records, threshold-freeze utilities and blank
+blind-review materials. This does not complete scientific evaluation: live Gemini
+quality/ablations, held-out model-quality inference and human ratings remain pending.
+New-layout extraction failures and blocked official downloads remain in accounting.
+The engineering gate default is still explicitly uncalibrated; an injected-case
+operating-point study is not broad real-world calibration.
+
 Determine experimentally whether MAFIS's added structure actually improves financial-analysis reliability and quality.
 
 Do not assume that every component helps. The literature contains cases where calculator/tool separation improves numerical reasoning while critic-based reflection is inconsistent, and cases where larger agent groups help complex tasks but hurt simpler ones. The evaluation must therefore isolate individual contributions.
@@ -68,3 +76,13 @@ Do not assume that every component helps. The literature contains cases where ca
 ## Design Notes
 
 The purpose of Phase 4 is not to prove MAFIS is better by default. The purpose is to test the research question honestly. A result showing that a component is unnecessary or only useful for certain task types is still a valuable finding.
+
+
+Closeout status and measured denominators are in `evaluation/results.md`. Amazon,
+Meta and PepsiCo were explicitly reclassified from test to parser development after
+compatibility exposure. Their later success cannot establish untouched held-out
+performance. SDK identity/usage manifests distinguish real live calls from injected
+SDK responses and mocks, slice reused adapters per condition and leave missing
+usage/billing unknown. One closeout comparator attempt returned HTTP503 and halted
+the shared 12-attempt ledger; no live principal pair completed. Blind human ratings
+remain pending. Original scientific exit criteria above are unchanged.

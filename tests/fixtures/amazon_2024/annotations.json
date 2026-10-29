@@ -1,0 +1,164 @@
+{
+  "document": {
+    "case_id": "amazon_2024",
+    "split": "development",
+    "source_url": "https://s2.q4cdn.com/299287126/files/doc_financials/2025/ar/Amazon-2024-Annual-Report.pdf",
+    "annotation_status": "AI source-inspected development gold; human review pending",
+    "test_contamination": true,
+    "attempts": [
+      {
+        "url": "https://s2.q4cdn.com/299287126/files/doc_financials/2025/ar/Amazon-2024-Annual-Report.pdf",
+        "http_status": 200
+      }
+    ],
+    "sha256": "d6c8919af431fbf38d5d92f2060ba8f45d084f26495c6f17ce81232102977908",
+    "bytes": 1314791,
+    "status": "source_inspected_development_gold",
+    "title": "Amazon.com, Inc. FY2024 annual report",
+    "entity": "Amazon.com, Inc.",
+    "original_split": "test"
+  },
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "currency_context": {
+    "pdf_page": 33,
+    "quote": "Our financial reporting currency is the U.S. Dollar"
+  },
+  "scale": 1000000,
+  "unit": "currency",
+  "current_start": "2024-01-01",
+  "prior_start": "2023-01-01",
+  "annual_header_dates": [
+    "2024-12-31",
+    "2023-12-31"
+  ],
+  "annotation_method": "AI independently inspected original source statement text/geometry and policy pages; six values transcribed and checked against raw PDF row columns, not production extractor outputs. No human review claimed. Reclassified from test into parser development after prior compatibility exposure.",
+  "annotation_status": "candidate source-inspected, not human-reviewed; ambiguity records remain authoritative",
+  "ambiguities": [
+    "Parser-development exposure after original test assignment; excluded from untouched held-out evaluation."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "637959",
+      "period_end": "2024-12-31",
+      "pdf_page": 49,
+      "printed_page": "37",
+      "table": "CONSOLIDATED STATEMENTS OF OPERATIONS",
+      "row": "Total net sales",
+      "column": "2024-12-31",
+      "source_row_quote": "Total net sales 513,983 574,785 637,959",
+      "bbox": [
+        68.20610000000005,
+        133.82929341999977,
+        540.3924000000001,
+        144.17919341999982
+      ]
+    },
+    {
+      "metric": "revenue",
+      "value": "574785",
+      "period_end": "2023-12-31",
+      "pdf_page": 49,
+      "printed_page": "37",
+      "table": "CONSOLIDATED STATEMENTS OF OPERATIONS",
+      "row": "Total net sales",
+      "column": "2023-12-31",
+      "source_row_quote": "Total net sales 513,983 574,785 637,959",
+      "bbox": [
+        68.20610000000005,
+        133.82929341999977,
+        540.3924000000001,
+        144.17919341999982
+      ]
+    },
+    {
+      "metric": "operating_income",
+      "value": "68593",
+      "period_end": "2024-12-31",
+      "pdf_page": 49,
+      "printed_page": "37",
+      "table": "CONSOLIDATED STATEMENTS OF OPERATIONS",
+      "row": "Operating income",
+      "column": "2024-12-31",
+      "source_row_quote": "Operating income 12,248 36,852 68,593",
+      "bbox": [
+        50.74610000000001,
+        264.7792934199994,
+        540.3924000000001,
+        275.1291934199994
+      ]
+    },
+    {
+      "metric": "net_income",
+      "value": "59248",
+      "period_end": "2024-12-31",
+      "pdf_page": 49,
+      "printed_page": "37",
+      "table": "CONSOLIDATED STATEMENTS OF OPERATIONS",
+      "row": "Net income (loss)",
+      "column": "2024-12-31",
+      "source_row_quote": "Net income (loss) $ (2,722) $ 30,425 $ 59,248",
+      "bbox": [
+        50.74610000000001,
+        381.1792934199995,
+        540.3924000000001,
+        391.5291934199995
+      ]
+    },
+    {
+      "metric": "current_assets",
+      "value": "190867",
+      "period_end": "2024-12-31",
+      "pdf_page": 51,
+      "printed_page": "39",
+      "table": "CONSOLIDATED BALANCE SHEETS",
+      "row": "Total current assets",
+      "column": "2024-12-31",
+      "source_row_quote": "Total current assets 172,351 190,867",
+      "bbox": [
+        108.9461,
+        189.8468934199998,
+        541.1199,
+        200.19679341999984
+      ]
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "179431",
+      "period_end": "2024-12-31",
+      "pdf_page": 51,
+      "printed_page": "39",
+      "table": "CONSOLIDATED BALANCE SHEETS",
+      "row": "Total current liabilities",
+      "column": "2024-12-31",
+      "source_row_quote": "Total current liabilities 164,917 179,431",
+      "bbox": [
+        108.9461,
+        349.89689342,
+        541.1199,
+        360.24679342
+      ]
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "amazon_2024-income",
+      "query": "Find the consolidated income statement revenue, income and fiscal column headers",
+      "relevant_pages": [
+        49
+      ],
+      "source_anchor": "Total net sales"
+    },
+    {
+      "id": "amazon_2024-balance",
+      "query": "Find total current assets and total current liabilities in the consolidated balance sheet",
+      "relevant_pages": [
+        51
+      ],
+      "source_anchor": "Total current assets"
+    }
+  ],
+  "split": "development",
+  "original_split": "test"
+}

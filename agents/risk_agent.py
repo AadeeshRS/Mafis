@@ -71,9 +71,16 @@ def _category_matches(category: str, claim: Claim) -> bool:
     return any(word in text for word in _KEYWORDS.get(category, ()))
 
 
-def _risk_identity(category: str, refs: tuple[ClaimVersionRef, ...]) -> str:
-    identity = json.dumps([category, [r.model_dump(mode="json") for r in refs]], sort_keys=True)
-    return "risk:" + sha256(identity.encode()).hexdigest()
+def _risk_identity(category: str, refs: tuple[ClaimVersionRef, ...], stable=False, memory=None) -> str:
+    if stable and memory is not None:
+        first=memory.resolve(refs[0])
+        # One logical topic per entity/source context. Adding a newly recovered
+        # financial metric revises this topic instead of orphaning the old risk.
+        anchor=refs[0].claim_id if category=="financial" else refs[-1].claim_id
+        identity=json.dumps([category,first.entity,first.accounting_scope,anchor],sort_keys=True)
+    else:
+        identity = json.dumps([category, [r.claim_id if stable else r.model_dump(mode="json") for r in refs]], sort_keys=True)
+    return ("risk:logical:" if stable else "risk:") + sha256(identity.encode()).hexdigest()
 
 
 def _canonical(memory: SharedMemory, category: str, refs: tuple[ClaimVersionRef, ...]) -> dict:
@@ -120,16 +127,27 @@ Independent Verification must additionally verify every pinned dependency. Passi
 this check establishes traceability only; the template explicitly disclaims proof.
 """
     expected = _canonical(memory, claim.metric, claim.candidate_claim_refs)
+    logical_id=_risk_identity(claim.metric,claim.candidate_claim_refs,stable=True,memory=memory)
+    if claim.claim_id==logical_id and claim.metric!="financial":
+        # The full-flow screen binds all available checked financial context for
+        # its entity. Stable identity must not allow a dropped dependency to pass.
+        required={memory.reference(c.claim_id) for c in memory.get_claims() if c.agent=="FinancialAgent"
+            and c.entity==claim.entity and c.accounting_scope==claim.accounting_scope and memory.is_current_verified(c.claim_id)}
+        actual={r for r in claim.candidate_claim_refs if memory.resolve(r).agent=="FinancialAgent"}
+        if required!=actual:
+            raise ValueError("Logical risk screen omitted current checked financial context")
     if (claim.agent != "RiskAgent" or claim.claim_type != "risk" or claim.value is not None
-            or claim.claim_id != _risk_identity(claim.metric, claim.candidate_claim_refs)
+            or claim.claim_id not in (_risk_identity(claim.metric, claim.candidate_claim_refs),
+                                     _risk_identity(claim.metric, claim.candidate_claim_refs, stable=True),logical_id)
             or claim.evidence or claim.supports_claim_ids or claim.unit is not None or claim.currency is not None
             or claim.scale != 1 or any(getattr(claim, field) != value for field, value in expected.items())):
         raise ValueError("Risk claim differs from its constrained dependency template")
 
 
 class RiskAgent:
-    def __init__(self, memory: SharedMemory, retriever=None, llm=None):
+    def __init__(self, memory: SharedMemory, retriever=None, llm=None, *, stable_ids=False, run_iteration=0):
         self.memory, self.retriever, self.llm = memory, retriever, llm
+        self.stable_ids, self.run_iteration = stable_ids, run_iteration
 
     def assess_risk(self, financial_claim_ids: list[str | ClaimVersionRef],
                     market_claim_ids: list[str | ClaimVersionRef], *,
@@ -182,17 +200,22 @@ class RiskAgent:
             for group in groups:
                 try:
                     values = _canonical(self.memory, category, group)
-                    identifier = _risk_identity(category, group)
+                    identifier = _risk_identity(category, group, stable=self.stable_ids,memory=self.memory if self.stable_ids else None)
                     claim = Claim(claim_id=identifier, agent="RiskAgent", claim_type="risk", **values,
                         candidate_claim_refs=group, support_level="calculation_backed" if values["calculation_ref"] else "single_source",
-                        verification_status="pending")
+                        verification_status="pending", run_iteration=self.run_iteration)
                     validate_risk_claim(claim, self.memory)
                     try:
                         old = self.memory.get_current(identifier)
                     except KeyError:
                         self.memory.append(claim)
                     else:
-                        validate_risk_claim(old, self.memory)
+                        if self.stable_ids:
+                            ignored = {"version","timestamp","verification_status","support_level","run_iteration"}
+                            if old.model_dump(exclude=ignored) != claim.model_dump(exclude=ignored):
+                                self.memory.append(claim.model_copy(update={"version":old.version+1}))
+                        else:
+                            validate_risk_claim(old, self.memory)
                     refs.append(self.memory.reference(identifier))
                     covered.add(category)
                 except (ValueError, TypeError, KeyError) as exc:

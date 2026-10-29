@@ -49,7 +49,7 @@ def _summary(observations, calculated, sections, failures=(), abstained=()):
 
 def score_mafis(state, retriever, gold):
     raw,calculated=expectations(gold); observations={}; failures=[]
-    try: ReportAgent(state["memory"],retriever).validate_report(state["report"])
+    try: ReportAgent(state["memory"],retriever,extended=state["analysis_map"].extended,full=state["analysis_map"].full).validate_report(state["report"])
     except ValueError as exc: failures.append(str(exc))
     entries=next(s.entries for s in state["analysis_map"].sections if s.title=="Sources")
     for entry in entries:
@@ -97,6 +97,46 @@ def score_baseline(run, gold):
     return summary
 
 
+def condition_usage(adapter, records, *, pricing=None):
+    """Observed per-condition usage; intent, injected transport and success differ."""
+    from gemini import GeminiAdapter
+    records=list(records)
+    kind=adapter.execution_kind if isinstance(adapter,GeminiAdapter) else (
+        "offline_mock" if getattr(adapter,"execution_kind",None)=="offline_mock" else "unknown")
+    successful=sum(r.status=="success" for r in records)
+    classification=("genuine_live" if successful else "failed_live_attempt" if records else "live_no_attempt") if kind=="live" else kind
+    fields={"prompt":"prompt_tokens","output":"output_tokens","total":"total_tokens","thinking":"thinking_tokens"}
+    tokens={};known={};coverage={}
+    for name,field in fields.items():
+        values=[getattr(r,field,None) for r in records]
+        available=[v for v in values if v is not None]
+        tokens[name]=sum(available) if values and len(available)==len(values) else None
+        known[name]=sum(available) if available else None
+        coverage[name]={"available_attempts":len(available),"total_attempts":len(values)}
+    estimate=None
+    if pricing is not None:
+        from datetime import date
+        date.fromisoformat(pricing["as_of"])
+        if pricing.get("model_id")!=getattr(getattr(adapter,"settings",None),"model_id",None):
+            raise ValueError("Pricing model differs from executed model")
+        if tokens["prompt"] is not None and tokens["output"] is not None:
+            # Pricing inputs must explicitly say whether the output count/rate
+            # already includes thinking. No undocumented double-counting.
+            extra=0 if pricing["output_includes_thinking"] else tokens["thinking"]
+            if extra is not None:
+                estimate=str((Decimal(tokens["prompt"])*Decimal(str(pricing["input_per_million"]))+
+                    Decimal(tokens["output"]+extra)*Decimal(str(pricing["output_per_million"])))/Decimal(1000000))
+    return {"execution_class":classification,"live_empirical_evaluation":kind=="live" and successful>0,
+        "live_attempted":bool(records) if kind=="live" else False if kind in ("disabled","offline_mock","injected_sdk_test") else None,
+        "transport_attempts":None if kind=="unknown" and not records else len(records),"generation_transport_attempts":len(records) if kind=="live" else 0 if kind!="unknown" else None,
+        "mock_transport_attempts":len(records) if kind=="injected_sdk_test" else 0,
+        "llm_requests":None if kind=="unknown" and not records else len({r.request_id for r in records}),"successful_requests":None if kind=="unknown" and not records else successful,
+        "tokens":tokens if records else None,"known_token_totals":known if records else None,"usage_coverage":coverage,
+        "usage_provenance":"provider telemetry" if kind=="live" else "injected SDK fixture" if kind=="injected_sdk_test" else kind,
+        "model_versions":sorted({r.model_version for r in records if r.model_version}),
+        "actual_api_cost_usd":None,"cost_estimate":estimate,"pricing_configuration":pricing}
+
+
 def usage(adapters, *, mocked, rates=None):
     records=[r for adapter in adapters for r in adapter.telemetry]
     def total(field):
@@ -105,6 +145,8 @@ def usage(adapters, *, mocked, rates=None):
     input_tokens,output_tokens,thinking=total("prompt_tokens"),total("output_tokens"),total("thinking_tokens")
     estimate=None
     if rates is not None and input_tokens is not None and output_tokens is not None:
+        from datetime import date
+        date.fromisoformat(rates["as_of"])
         estimate=str((Decimal(input_tokens)*Decimal(rates["input_per_million"])+Decimal(output_tokens+(thinking or 0))*Decimal(rates["output_per_million"]))/Decimal(1000000))
     return {"llm_calls":len({r.request_id for r in records}),"transport_attempts":len(records),
         "input_tokens":input_tokens,"output_tokens":output_tokens,"thinking_tokens":thinking,

@@ -1,0 +1,117 @@
+{
+  "document": {
+    "case_id": "walmart_2024",
+    "split": "validation",
+    "source_url": "https://corporate.walmart.com/content/dam/corporate/documents/newsroom/2024/04/25/walmart-releases-2024-annual-report-and-proxy-statement/walmart-inc-2024-annual-report.pdf",
+    "annotation_status": "not yet independently annotated",
+    "test_contamination": false,
+    "attempts": [
+      {
+        "url": "https://corporate.walmart.com/content/dam/corporate/documents/newsroom/2024/04/25/walmart-releases-2024-annual-report-and-proxy-statement/walmart-inc-2024-annual-report.pdf",
+        "http_status": 200
+      }
+    ],
+    "sha256": "68ac2d343b54d80ebde1bc900dcfd6fbee3bc855a18dd0959d37c9592a5144a8",
+    "bytes": 4869782,
+    "status": "downloaded_candidate_not_gold",
+    "title": "Walmart Inc. FY2024 annual report",
+    "entity": "Walmart Inc."
+  },
+  "accounting_scope": "consolidated",
+  "currency": null,
+  "currency_context": null,
+  "scale": 1000000,
+  "unit": "currency",
+  "current_start": null,
+  "prior_start": null,
+  "annual_header_dates": [
+    "2024-01-31",
+    "2023-01-31"
+  ],
+  "annotation_method": "AI source inspection of original PDF text/table headers using an independent read-only pdfplumber pass; Walmart rendered visually. No production extractor outputs or human review used.",
+  "annotation_status": "candidate source-inspected, not human-reviewed; ambiguity records remain authoritative",
+  "ambiguities": [
+    "CID-encoded text is unsupported by current production extraction. Values were visually inspected from independently rendered PDF pages 56/58.",
+    "Explicit presentation USD context remains unlocated; dollar symbols alone are insufficient."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "648125",
+      "period_end": "2024-01-31",
+      "pdf_page": 56,
+      "printed_page": "54",
+      "table": "Consolidated income statement",
+      "row": "Total revenues",
+      "column": "2024-01-31"
+    },
+    {
+      "metric": "revenue",
+      "value": "611289",
+      "period_end": "2023-01-31",
+      "pdf_page": 56,
+      "printed_page": "54",
+      "table": "Consolidated income statement",
+      "row": "Total revenues",
+      "column": "2023-01-31"
+    },
+    {
+      "metric": "operating_income",
+      "value": "27012",
+      "period_end": "2024-01-31",
+      "pdf_page": 56,
+      "printed_page": "54",
+      "table": "Consolidated income statement",
+      "row": "Operating income",
+      "column": "2024-01-31"
+    },
+    {
+      "metric": "net_income",
+      "value": "16270",
+      "period_end": "2024-01-31",
+      "pdf_page": 56,
+      "printed_page": "54",
+      "table": "Consolidated income statement",
+      "row": "Consolidated net income",
+      "column": "2024-01-31"
+    },
+    {
+      "metric": "current_assets",
+      "value": "76877",
+      "period_end": "2024-01-31",
+      "pdf_page": 58,
+      "printed_page": "56",
+      "table": "Consolidated balance sheet",
+      "row": "Total current assets",
+      "column": "2024-01-31"
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "92415",
+      "period_end": "2024-01-31",
+      "pdf_page": 58,
+      "printed_page": "56",
+      "table": "Consolidated balance sheet",
+      "row": "Total current liabilities",
+      "column": "2024-01-31"
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "walmart_2024-income",
+      "query": "Find the consolidated income statement revenue, income and fiscal column headers",
+      "relevant_pages": [
+        56
+      ],
+      "source_anchor": "Total revenues"
+    },
+    {
+      "id": "walmart_2024-balance",
+      "query": "Find total current assets and total current liabilities in the consolidated balance sheet",
+      "relevant_pages": [
+        58
+      ],
+      "source_anchor": "Total current assets"
+    }
+  ]
+}

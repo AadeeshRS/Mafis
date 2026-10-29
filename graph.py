@@ -55,6 +55,11 @@ class ExtendedState(Phase1State, total=False):
     verification_records: tuple[VerificationRecord, ...]
     health_gate: GateResult
     reanalysis_request: dict[str, Any] | None
+    bull_result: Any
+    bear_result: Any
+    critic_result: Any
+    retry_decision: Any
+    retry_execution: Any
 
 
 def build_graph(*, retriever=None, document_llm=None, financial_llm=None):
@@ -146,7 +151,7 @@ def run_pipeline(question: str, document: DocumentInput | dict | None = None, *,
 
 def build_extended_graph(*, retriever=None, document_llm=None, financial_llm=None,
                          market_filters=None, risk_categories=None, as_of: date | None = None,
-                         health_threshold: float = VERIFICATION_HEALTH_GATE_THRESHOLD):
+                         health_threshold: float = VERIFICATION_HEALTH_GATE_THRESHOLD, _full=False, _prepared=None):
     """Compile Batch 1: fresh checks, deterministic analysis, dated context, Risk.
 
     This is an explicit opt-in. A failed gate produces a partial report and a
@@ -172,15 +177,21 @@ def build_extended_graph(*, retriever=None, document_llm=None, financial_llm=Non
         except (ValueError, TypeError):
             doc = None
             issues += (AgentIssue(code="invalid_document_input", message="Document metadata needs a path, HTTP source URL, title, and entity"),)
-        plan = PlannerAgent().build_extended_plan(state.get("question", ""), doc is not None)
+        plan = (PlannerAgent().build_full_plan if _full else PlannerAgent().build_extended_plan)(state.get("question", ""), doc is not None)
         return {"memory": memory, "document": doc, "plan": plan, "issues": issues + plan.issues,
                 "verification_records": (), "reanalysis_request": None}
 
     def ingest(state):
         doc = state["document"]
         try:
-            result = ingest_document(doc.path, source_url=str(doc.source_url), title=doc.title,
+            result = _prepared if _prepared is not None else ingest_document(doc.path, source_url=str(doc.source_url), title=doc.title,
                                      entity=doc.entity, retriever=retriever)
+            if _prepared is not None:
+                from hashlib import sha256
+                if (result.source.sha256 != sha256(Path(doc.path).read_bytes()).hexdigest()
+                        or str(result.source.source_url) != str(doc.source_url) or result.source.entity != doc.entity
+                        or result.source.title != doc.title):
+                    raise ValueError("Prepared source bundle does not match the requested document")
             state["memory"].register_source(result.source)
             return {"source_id": result.source.source_id, "issues": state["issues"] + tuple(
                 AgentIssue(code="ingestion_limitation", message=text) for text in result.limitations)}
@@ -212,7 +223,7 @@ def build_extended_graph(*, retriever=None, document_llm=None, financial_llm=Non
             issue = AgentIssue(code="no_verified_primitives", message="Financial analysis requires independently verified source inputs")
             return {"financial_result": FinancialResult(status="failed", issues=(issue,)),
                     "issues": state["issues"] + (issue,)}
-        result = FinancialAgent(state["memory"], financial_llm).analyze(state["question"],
+        result = FinancialAgent(state["memory"], financial_llm, stable_ids=_full).analyze(state["question"],
             operations=state["plan"].operations, primitive_claim_ids=ids, target_year=state["plan"].target_year)
         return {"financial_result": result, "issues": state["issues"] + result.issues}
 
@@ -232,7 +243,7 @@ def build_extended_graph(*, retriever=None, document_llm=None, financial_llm=Non
 
     def risk(state):
         financial_refs = list(state["financial_result"].claim_refs) if "financial_result" in state else []
-        result = RiskAgent(state["memory"], retriever).assess_risk(financial_refs,
+        result = RiskAgent(state["memory"], retriever, stable_ids=_full).assess_risk(financial_refs,
             list(state["market_result"].claim_refs), categories=risk_categories, as_of=as_of)
         return {"risk_result": result, "issues": state["issues"] + result.issues}
 
@@ -332,7 +343,14 @@ def save_outputs(state: Phase1State, directory: str | Path, *, adapters=()) -> N
         "calculations": [c.model_dump(mode="json") for c in state["memory"].get_calculations()]}
     if "health_gate" in state:
         evidence_export["verification_records"] = [r.model_dump(mode="json") for r in state["memory"].get_verification_records()]
-    (directory / "evidence.json").write_text(json.dumps(evidence_export, indent=2) + "\n", encoding="utf-8")
+    if "critic_result" in state or "retry_decision" in state:
+        evidence_export["contradictions"] = [r.model_dump(mode="json") for r in state["memory"].get_contradictions(history=True)]
+        evidence_export["retry_decisions"] = [r.model_dump(mode="json") for r in state["memory"].get_retry_decisions()]
+        evidence_export["gate_history"] = state["memory"].get_health_gate_history()
+        evidence_export["retry_execution"] = state.get("retry_execution")
+    (directory / "evidence.json").write_text(json.dumps(evidence_export, indent=2,
+        default=lambda item:item.model_dump(mode="json")) + "\n", encoding="utf-8")
+    adapters=tuple({id(adapter):adapter for adapter in adapters}.values())
     summary = {"run_id": state["memory"].run_id, "report_status": state["report"].status,
         "execution_mode": state["analysis_map"].execution_mode,
         "claim_count": len(state["memory"].get_claims()),
@@ -352,19 +370,32 @@ def main():
     parser.add_argument("--output", default="output/phase1")
     parser.add_argument("--live", action="store_true", help="Explicitly enable API requests; account billing/quota must be checked by the caller")
     parser.add_argument("--extended", action="store_true", help="Opt into Batch 1 independent verification, dated Market, Risk and Health Gate")
+    parser.add_argument("--full", action="store_true", help="Opt into Bull/Bear/Critic and the single targeted retry")
+    parser.add_argument("--free-tier-confirmed",action="store_true",help="Caller attestation required for full live flow")
+    parser.add_argument("--request-budget",type=int,default=12,help="Full flow shared generation transport attempt cap (1-12)")
     parser.add_argument("--as-of", type=date.fromisoformat, help="Optional Market/Risk evidence cutoff, YYYY-MM-DD")
     parser.add_argument("--health-threshold", type=float, default=VERIFICATION_HEALTH_GATE_THRESHOLD)
     parser.add_argument("--market-snapshot", help="Official text snapshot manifest to index through the shared retriever (extended only)")
     parser.add_argument("--risk-category", action="append", choices=("financial", "operational", "market", "regulatory", "macro", "governance", "competitive"),
                         help="Constrain requested risk coverage; repeat for multiple categories (extended only)")
     args = parser.parse_args()
-    if not args.extended and (args.market_snapshot or args.risk_category or args.as_of):
+    if args.full and args.extended:
+        parser.error("--full and --extended are mutually exclusive")
+    if args.full and (not 1 <= args.request_budget <= 12 or args.live and not args.free_tier_confirmed):
+        parser.error("Full live flow requires free-tier attestation and a shared 1-12 attempt budget")
+    if not (args.extended or args.full) and (args.market_snapshot or args.risk_category or args.as_of):
         parser.error("--market-snapshot, --risk-category and --as-of require --extended")
     document_adapter = GeminiAdapter(GeminiSettings.from_env(DOCUMENT_MODEL), allow_live=args.live)
     financial_adapter = GeminiAdapter(GeminiSettings.from_env(FINANCIAL_MODEL), allow_live=args.live)
-    runner = run_extended_pipeline if args.extended else run_pipeline
+    if args.full:
+        budget=[args.request_budget]
+        document_adapter.request_budget=financial_adapter.request_budget=budget
+    runner = run_full_pipeline if args.full else run_extended_pipeline if args.extended else run_pipeline
     options = {"as_of": args.as_of, "health_threshold": args.health_threshold,
-               "risk_categories": tuple(args.risk_category) if args.risk_category else None} if args.extended else {}
+               "risk_categories": tuple(args.risk_category) if args.risk_category else None} if args.extended or args.full else {}
+    if args.full:
+        options.update({key:GeminiAdapter(document_adapter.settings,allow_live=args.live,request_budget=budget)
+                        for key in ("bull_llm","bear_llm","critic_llm")})
     if args.market_snapshot:
         from rag.market_sources import ingest_market_snapshot
         retriever = get_shared_retriever()
@@ -372,7 +403,8 @@ def main():
         options.update(retriever=retriever, market_filters={"doc_id": snapshot.source.source_id, "kind": "narrative"})
     state = runner(args.question, DocumentInput(path=args.pdf, source_url=args.source_url, title=args.title, entity=args.entity),
         document_llm=document_adapter, financial_llm=financial_adapter, **options)
-    save_outputs(state, args.output, adapters=(document_adapter, financial_adapter))
+    adapters = (document_adapter, financial_adapter) + tuple(options[k] for k in ("bull_llm", "bear_llm", "critic_llm") if k in options)
+    save_outputs(state, args.output, adapters=adapters)
     print(json.dumps({"status": state["report"].status, "output": str(Path(args.output).resolve()),
                       "execution_mode": state["analysis_map"].execution_mode}))
 
@@ -399,7 +431,100 @@ def should_reanalyze(state: dict[str, Any]) -> str:
     Returns:
         Route label: 'reanalyze', 'unresolved', or 'report'.
     """
-    raise NotImplementedError
+    decision = state.get("retry_decision")
+    if decision is None:
+        return "report"
+    return "reanalyze" if decision.outcome == "executed" else "unresolved"
+
+
+def build_full_graph(*, retriever=None, document_llm=None, financial_llm=None, bull_llm=None, bear_llm=None, critic_llm=None,
+                     market_filters=None,risk_categories=None,as_of=None,health_threshold=VERIFICATION_HEALTH_GATE_THRESHOLD,
+                     reanalysis=True, bull_bear=True, critic=True, prepared_document=None):
+    from agents.full_workflow import requests_for, run_reasoning, execute_targeted
+    from agents.verification_gate import VerificationHealthGate
+    retriever = retriever if retriever is not None else get_shared_retriever()
+    document_llm = document_llm if document_llm is not None else GeminiAdapter()
+    financial_llm = financial_llm if financial_llm is not None else GeminiAdapter()
+    bull_llm = bull_llm if bull_llm is not None else GeminiAdapter()
+    bear_llm = bear_llm if bear_llm is not None else GeminiAdapter()
+    critic_llm = critic_llm if critic_llm is not None else GeminiAdapter()
+    # Apply one transport counter even to callers of the Python entry point.
+    # Offline doubles have no SDK requests; the CLI supplies this same object.
+    adapters = [a for a in (document_llm,financial_llm,bull_llm,bear_llm,critic_llm) if isinstance(a,GeminiAdapter)]
+    supplied = [a.request_budget for a in adapters if a.request_budget is not None]
+    if supplied and (any(b is not supplied[0] for b in supplied) or len(supplied[0])!=1
+                     or not isinstance(supplied[0][0],int) or not 0 <= supplied[0][0] <= 12):
+        raise ValueError("Full flow requires one shared generation counter bounded by 12 attempts")
+    shared_budget = supplied[0] if supplied else [12]
+    for adapter in adapters:
+        adapter.request_budget = shared_budget
+    initial = build_extended_graph(retriever=retriever,document_llm=document_llm,financial_llm=financial_llm,
+        market_filters=market_filters,risk_categories=risk_categories,as_of=as_of,health_threshold=health_threshold,_full=True,_prepared=prepared_document)
+    def refresh(s):
+        factual_issues = tuple(i for i in s["issues"] if not i.code.startswith(("bull_","bear_","critic_","health_gate_blocked")))
+        s["health_gate"] = VerificationHealthGate(s["memory"],health_threshold).evaluate(issues=factual_issues)
+        return s
+    def evidence(s):
+        return initial.invoke(s)
+    def reasoning(s):
+        if bull_bear:
+            run_reasoning(s,retriever,bull_llm,bear_llm,critic_llm,critic=critic)
+        elif critic:
+            run_reasoning(s,retriever,bull_llm,bear_llm,critic_llm,stances=(),critic=True)
+        return refresh(s)
+    def allocate(s):
+        requests = requests_for(s)
+        if requests:
+            s["retry_decision"] = PlannerAgent().allocate_retry(s["memory"],requests,enabled=reanalysis)
+        return s
+    def targeted(s):
+        decision = s["retry_decision"]
+        execute_targeted(s,decision,retriever,document_llm,financial_llm,market_filters,risk_categories,as_of)
+        refresh(s)
+        s["retry_execution"]["nodes"] += ("health_gate",)
+        if s["health_gate"].decision == "passed":
+            stances = tuple(c for c in ("Bull","Bear") if c in decision.rerun_nodes
+                or not s.get(c.lower()+"_result") or any(not s["memory"].is_current_verified(r.claim_id) for r in s[c.lower()+"_result"].claim_refs))
+            if bull_bear or critic:
+                run_reasoning(s,retriever,bull_llm,bear_llm,critic_llm,stances=stances if bull_bear else (),critic=critic)
+                s["retry_execution"]["nodes"] += (stances if bull_bear else ()) + (("critic",) if critic else ())
+        elif critic and s["memory"].get_contradictions():
+            from agents.critic_agent import CriticAgent
+            s["critic_result"]=CriticAgent(s["memory"]).check_contradictions(run_iteration=1,exhausted=True)
+            s["retry_execution"]["nodes"] += ("critic:mechanical",)
+        return refresh(s)
+    def final(s):
+        remaining = requests_for(s)
+        if remaining and s.get("retry_decision") and s["retry_decision"].outcome == "executed":
+            s["terminal_retry_decision"] = PlannerAgent().allocate_retry(s["memory"],remaining)
+        if s["health_gate"].decision == "blocked" and not any(i.code == "health_gate_blocked" for i in s["issues"]):
+            s["issues"] += (AgentIssue(code="health_gate_blocked",message=s["health_gate"].reason),)
+        agent = ReportAgent(s["memory"],retriever,full=True)
+        if s.get("retry_execution"):
+            s["retry_execution"]["nodes"] += ("report",)
+        modes="; ".join(name+"="+getattr(adapter,"mode","injected offline model double") for name,adapter in
+            (("Document",document_llm),("Financial",financial_llm),("Bull",bull_llm),("Bear",bear_llm),("Critic",critic_llm)))
+        s["analysis_map"] = agent.build_analysis_map(s["issues"],execution_mode="Full MAFIS; "+modes,health_gate=s["health_gate"])
+        s["report"] = agent.generate_report(s["analysis_map"])
+        return s
+    builder = StateGraph(ExtendedState)
+    for name, fn in (("evidence",evidence),("adversarial",reasoning),("planner_retry",allocate),("targeted_retry",targeted),("final_report",final)):
+        def timed(s, fn=fn,name=name):
+            start=perf_counter(); update=fn(dict(s)); update["stage_timings_ms"]={**update.get("stage_timings_ms",{}),name:(perf_counter()-start)*1000}; return update
+        builder.add_node(name,timed)
+    builder.add_edge(START,"evidence")
+    builder.add_conditional_edges("evidence",lambda s:"adversarial" if s["health_gate"].decision == "passed" else "planner_retry",["adversarial","planner_retry"])
+    builder.add_edge("adversarial","planner_retry")
+    builder.add_conditional_edges("planner_retry",lambda s:"targeted_retry" if s.get("retry_decision") and s["retry_decision"].outcome == "executed" else "final_report",["targeted_retry","final_report"])
+    builder.add_edge("targeted_retry","final_report"); builder.add_edge("final_report",END)
+    return builder.compile()
+
+
+def run_full_pipeline(question,document=None,*,memory=None,**options):
+    memory = memory if memory is not None else SharedMemory()
+    if memory.get_claims() or memory.get_calculations() or memory.get_retry_decisions():
+        raise ValueError("Start a pipeline invocation with an empty run store")
+    return build_full_graph(**options).invoke({"question":question,"document":document,"memory":memory,"issues":()},config={"recursion_limit":20})
 
 
 if __name__ == "__main__":

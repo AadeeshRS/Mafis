@@ -1,0 +1,113 @@
+{
+  "document": {
+    "case_id": "nike_2024",
+    "split": "test",
+    "source_url": "https://investors.nike.com/_assets/_3064c626b80c9d8918cd39931fcf3802/nike/db/950/9329/annual_report/427857-1-_7_Nike-2024-Combo_Form-10-K_WR.pdf",
+    "annotation_status": "not yet independently annotated",
+    "test_contamination": false,
+    "attempts": [
+      {
+        "url": "https://www.sec.gov/Archives/edgar/data/320187/000130817924000659/nke4278571-ars.pdf",
+        "http_status": 403
+      },
+      {
+        "url": "https://investors.nike.com/_assets/_3064c626b80c9d8918cd39931fcf3802/nike/db/950/9329/annual_report/427857-1-_7_Nike-2024-Combo_Form-10-K_WR.pdf",
+        "http_status": 200
+      }
+    ],
+    "status": "downloaded_candidate_not_gold",
+    "sha256": "ad45136466f5f0806d7b5e8ec87c62dbb1da071cccba0e9cff880e19d40ca43b",
+    "bytes": 4454257,
+    "title": "NIKE, Inc. FY2024 annual report",
+    "entity": "NIKE, Inc."
+  },
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "currency_context": {
+    "pdf_page": 70,
+    "quote": "Adjustments resulting from translating foreign functional currency financial statements into U.S. Dollars"
+  },
+  "scale": 1000000,
+  "unit": "currency",
+  "current_start": null,
+  "prior_start": null,
+  "annual_header_dates": [
+    "2024-05-31",
+    "2023-05-31"
+  ],
+  "annotation_method": "AI source inspection of original PDF text/table headers using an independent read-only pdfplumber pass; Walmart rendered visually. No production extractor outputs or human review used.",
+  "annotation_status": "candidate source-inspected, not human-reviewed; ambiguity records remain authoritative",
+  "ambiguities": [
+    "Operating income is not a separately reported row in the inspected statement. No derived substitute is gold; operating-margin scoring unavailable."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "51362",
+      "period_end": "2024-05-31",
+      "pdf_page": 60,
+      "printed_page": "57",
+      "table": "Consolidated income statement",
+      "row": "Revenues",
+      "column": "2024-05-31"
+    },
+    {
+      "metric": "revenue",
+      "value": "51217",
+      "period_end": "2023-05-31",
+      "pdf_page": 60,
+      "printed_page": "57",
+      "table": "Consolidated income statement",
+      "row": "Revenues",
+      "column": "2023-05-31"
+    },
+    {
+      "metric": "net_income",
+      "value": "5700",
+      "period_end": "2024-05-31",
+      "pdf_page": 60,
+      "printed_page": "57",
+      "table": "Consolidated income statement",
+      "row": "NET INCOME",
+      "column": "2024-05-31"
+    },
+    {
+      "metric": "current_assets",
+      "value": "25382",
+      "period_end": "2024-05-31",
+      "pdf_page": 62,
+      "printed_page": "59",
+      "table": "Consolidated balance sheet",
+      "row": "Total current assets",
+      "column": "2024-05-31"
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "10593",
+      "period_end": "2024-05-31",
+      "pdf_page": 62,
+      "printed_page": "59",
+      "table": "Consolidated balance sheet",
+      "row": "Total current liabilities",
+      "column": "2024-05-31"
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "nike_2024-income",
+      "query": "Find the consolidated income statement revenue, income and fiscal column headers",
+      "relevant_pages": [
+        60
+      ],
+      "source_anchor": "Revenues"
+    },
+    {
+      "id": "nike_2024-balance",
+      "query": "Find total current assets and total current liabilities in the consolidated balance sheet",
+      "relevant_pages": [
+        62
+      ],
+      "source_anchor": "Total current assets"
+    }
+  ]
+}

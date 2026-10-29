@@ -1,0 +1,119 @@
+{
+  "document": {
+    "case_id": "amd_2024",
+    "split": "validation",
+    "role": "reserve for unavailable Microsoft source; original case/failures retained",
+    "parent_manifest_sha256": "02970b9733a4231fa7338badec38f7cc5155ab7038e1987986016855c5ee059c",
+    "source_url": "https://ir.amd.com/financial-information/sec-filings/content/0001193125-25-067185/0001193125-25-067185.pdf",
+    "http_status": 200,
+    "status": "downloaded_candidate_not_gold",
+    "sha256": "28f3911e60546f90e4d98496f2f111179179ee760602ac2d1e71a313c1334567",
+    "bytes": 2778205
+  },
+  "entity": "Advanced Micro Devices, Inc.",
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "scale": 1000000,
+  "unit": "currency",
+  "currency_context": {
+    "pdf_page": 84,
+    "printed_page": "68",
+    "quote": "The functional currency of the Company\u2019s foreign subsidiaries is the U.S. dollar."
+  },
+  "fiscal_calendar_context": {
+    "pdf_page": 80,
+    "printed_page": "64",
+    "quote": "Fiscal years 2024 and 2023 each consisted of 52 weeks, while fiscal year 2022 consisted of 53 weeks."
+  },
+  "current_start": null,
+  "prior_start": null,
+  "annual_header_dates": [
+    "2024-12-28",
+    "2023-12-30",
+    "2022-12-31"
+  ],
+  "annotation_method": "AI independently inspected original PDF statement text on pages 75/77 and policy pages 80/84 using read-only pdfplumber. No production extractor outputs used. No human review claimed.",
+  "ambiguities": [
+    "Dotted leader/spaceless row text is outside the current financial extraction profile; no extractor tuning applied."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "25785",
+      "period_end": "2024-12-28",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Net revenue",
+      "column": "December 28, 2024"
+    },
+    {
+      "metric": "revenue",
+      "value": "22680",
+      "period_end": "2023-12-30",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Net revenue",
+      "column": "December 30, 2023"
+    },
+    {
+      "metric": "operating_income",
+      "value": "1900",
+      "period_end": "2024-12-28",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Operating income",
+      "column": "December 28, 2024"
+    },
+    {
+      "metric": "net_income",
+      "value": "1641",
+      "period_end": "2024-12-28",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Net income",
+      "column": "December 28, 2024"
+    },
+    {
+      "metric": "current_assets",
+      "value": "19049",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "61",
+      "table": "Consolidated Balance Sheets",
+      "row": "Total current assets",
+      "column": "December 28, 2024"
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "7281",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "61",
+      "table": "Consolidated Balance Sheets",
+      "row": "Total current liabilities",
+      "column": "December 28, 2024"
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "amd-income",
+      "query": "Find net revenue and operating income in consolidated statements of operations",
+      "relevant_pages": [
+        75
+      ],
+      "source_anchor": "Operatingincome"
+    },
+    {
+      "id": "amd-balance",
+      "query": "Find total current assets and liabilities",
+      "relevant_pages": [
+        77
+      ],
+      "source_anchor": "Total current assets"
+    }
+  ]
+}

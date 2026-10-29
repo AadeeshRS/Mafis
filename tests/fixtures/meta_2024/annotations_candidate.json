@@ -1,0 +1,121 @@
+{
+  "document": {
+    "case_id": "meta_2024",
+    "split": "test",
+    "source_url": "https://s21.q4cdn.com/399680738/files/doc_financials/2024/ar/Meta-12-31-2024-10K-ARS.pdf",
+    "annotation_status": "not yet independently annotated",
+    "test_contamination": false,
+    "attempts": [
+      {
+        "url": "https://investor.atmeta.com/financials/",
+        "http_status": 403
+      },
+      {
+        "url": "https://s21.q4cdn.com/399680738/files/doc_financials/2024/ar/Meta-12-31-2024-10K-ARS.pdf",
+        "http_status": 200
+      }
+    ],
+    "status": "downloaded_candidate_not_gold",
+    "sha256": "9b81ad9b6ecb9e23b1d810b9cecabcad05e00386d24dd64b4cd44a5bab54a13f",
+    "bytes": 1892145,
+    "title": "Meta Platforms, Inc. FY2024 annual report",
+    "entity": "Meta Platforms, Inc."
+  },
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "currency_context": {
+    "pdf_page": 100,
+    "quote": "statements of these subsidiaries to U.S. dollars using month-end rates of exchange for assets and liabilities, and average rates"
+  },
+  "scale": 1000000,
+  "unit": "currency",
+  "current_start": null,
+  "prior_start": null,
+  "annual_header_dates": [
+    "2024-12-31",
+    "2023-12-31"
+  ],
+  "annotation_method": "AI source inspection of original PDF text/table headers using an independent read-only pdfplumber pass; Walmart rendered visually. No production extractor outputs or human review used.",
+  "annotation_status": "candidate source-inspected, not human-reviewed; ambiguity records remain authoritative",
+  "ambiguities": [],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "164501",
+      "period_end": "2024-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "Consolidated income statement",
+      "row": "Revenue",
+      "column": "2024-12-31"
+    },
+    {
+      "metric": "revenue",
+      "value": "134902",
+      "period_end": "2023-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "Consolidated income statement",
+      "row": "Revenue",
+      "column": "2023-12-31"
+    },
+    {
+      "metric": "operating_income",
+      "value": "69380",
+      "period_end": "2024-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "Consolidated income statement",
+      "row": "Income from operations",
+      "column": "2024-12-31"
+    },
+    {
+      "metric": "net_income",
+      "value": "62360",
+      "period_end": "2024-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "Consolidated income statement",
+      "row": "Net income",
+      "column": "2024-12-31"
+    },
+    {
+      "metric": "current_assets",
+      "value": "100045",
+      "period_end": "2024-12-31",
+      "pdf_page": 88,
+      "printed_page": "86",
+      "table": "Consolidated balance sheet",
+      "row": "Total current assets",
+      "column": "2024-12-31"
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "33596",
+      "period_end": "2024-12-31",
+      "pdf_page": 88,
+      "printed_page": "86",
+      "table": "Consolidated balance sheet",
+      "row": "Total current liabilities",
+      "column": "2024-12-31"
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "meta_2024-income",
+      "query": "Find the consolidated income statement revenue, income and fiscal column headers",
+      "relevant_pages": [
+        89
+      ],
+      "source_anchor": "Revenue"
+    },
+    {
+      "id": "meta_2024-balance",
+      "query": "Find total current assets and total current liabilities in the consolidated balance sheet",
+      "relevant_pages": [
+        88
+      ],
+      "source_anchor": "Total current assets"
+    }
+  ]
+}

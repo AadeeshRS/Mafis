@@ -1,0 +1,81 @@
+{
+  "document": {
+    "case_id": "intel_2024",
+    "split": "validation",
+    "source_url": "https://www.intc.com/filings-reports/all-sec-filings/content/0000050863-25-000052/a2024arsform10-k.pdf",
+    "annotation_status": "not yet independently annotated",
+    "test_contamination": false,
+    "http_status": 200,
+    "sha256": "5b9ba57e8d6025b2e78ba0e98933d006f1019dfb22f40dc3670826898a7c258d",
+    "bytes": 9555296,
+    "status": "downloaded_candidate_not_gold"
+  },
+  "entity": "Intel Corporation",
+  "accounting_scope": "consolidated",
+  "split": "validation",
+  "currency": null,
+  "scale": 1000000,
+  "unit": "currency",
+  "annotation_method": "AI visual inspection of independently rendered official PDF pages 65/67; no production extraction values used; no human review claimed",
+  "ambiguities": [
+    "Explicit USD context not yet independently located; dollar symbols alone insufficient",
+    "Duplicated glyph text layer unsupported by current extraction profile; retained as extraction failure",
+    "Consolidated loss -19233 includes noncontrolling interests; Intel-attributable -18756 is not substituted"
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "53101",
+      "period_end": "2024-12-28",
+      "pdf_page": 65,
+      "printed_page": "57",
+      "row": "Net revenue",
+      "column": "Dec 28, 2024"
+    },
+    {
+      "metric": "revenue",
+      "value": "54228",
+      "period_end": "2023-12-30",
+      "pdf_page": 65,
+      "printed_page": "57",
+      "row": "Net revenue",
+      "column": "Dec 30, 2023"
+    },
+    {
+      "metric": "operating_income",
+      "value": "-11678",
+      "period_end": "2024-12-28",
+      "pdf_page": 65,
+      "printed_page": "57",
+      "row": "Operating income (loss)",
+      "column": "Dec 28, 2024"
+    },
+    {
+      "metric": "net_income",
+      "value": "-19233",
+      "period_end": "2024-12-28",
+      "pdf_page": 65,
+      "printed_page": "57",
+      "row": "Net income (loss)",
+      "column": "Dec 28, 2024"
+    },
+    {
+      "metric": "current_assets",
+      "value": "47324",
+      "period_end": "2024-12-28",
+      "pdf_page": 67,
+      "printed_page": "59",
+      "row": "Total current assets",
+      "column": "Dec 28, 2024"
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "35666",
+      "period_end": "2024-12-28",
+      "pdf_page": 67,
+      "printed_page": "59",
+      "row": "Total current liabilities",
+      "column": "Dec 28, 2024"
+    }
+  ]
+}

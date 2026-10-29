@@ -23,32 +23,8 @@ def _annual_header_dates(text):
     Revenue extraction intentionally retains fewer columns than the source's
     complete annual header. Never infer header anchors from selected table cells.
     """
-    text = " ".join(text.split())
-    full = list(_DATE.finditer(text))
-    dates = ()
-    if full and re.fullmatch(r"(?:Year[s]? [Ee]nded )?" + re.escape(full[0][0]) + r"(?:\s+\d{4})*", text):
-        match = full[0]
-        dates = tuple(date(int(year), _MONTHS[match[1][:3]], int(match[2]))
-                      for year in re.findall(r"\b\d{4}\b", text))
-    else:
-        # After whitespace normalization, the last month/day of a split header
-        # touches the FIRST year and can look like one complete date. Parse the
-        # whole month/day row plus complete year row before accepting anchors.
-        parts = list(re.finditer(r"([A-Z][a-z]+)\s+(\d{1,2}),", text))
-        if len(parts) >= 2:
-            if any(match[1][:3] not in _MONTHS for match in parts):
-                raise ValueError("Unknown month in fresh comparative header")
-            prefix = text[:parts[0].start()].strip()
-            gaps = [text[a.end():b.start()] for a,b in zip(parts,parts[1:])]
-            suffix = text[parts[-1].end():].strip()
-            if prefix in ("", "Year ended", "Years ended") and all(not gap.strip() for gap in gaps) and re.fullmatch(r"\d{4}(?:\s+\d{4})+", suffix):
-                years = suffix.split()
-                if len(years) == len(parts):
-                    dates = tuple(date(int(year), _MONTHS[match[1][:3]], int(match[2]))
-                                  for match,year in zip(parts,years))
-    if len(dates) < 2 or len(set(dates)) != len(dates) or dates != tuple(sorted(dates,reverse=True)):
-        raise ValueError("Fresh annual header is not an unambiguous supported comparative date header")
-    return dates
+    from rag.ingest import comparative_dates
+    return tuple(sorted(comparative_dates(text),reverse=True))
 
 
 class VerificationAgent:
@@ -207,6 +183,14 @@ class VerificationAgent:
 
     def verify_claim(self, claim_id: str) -> VerificationRecord:
         claim = self.memory.get_current(claim_id)
+        shape_error = claim.verification_shape_error()
+        if shape_error is not None:
+            ref = self.memory.reference(claim_id)
+            return self.memory.append_verification(VerificationRecord(
+                verification_id="verification:" + str(uuid4()), checked_ref=ref,
+                resulting_ref=ref.model_copy(update={"version": claim.version + 1}),
+                outcome="unsupported", support_level="calculation_backed" if claim.calculation_ref else "unsupported",
+                checks=(VerificationCheck(code="unsupported_claim_shape", outcome="missing", message=shape_error),)))
         records = self.memory.get_verification_records(claim_id)
         if claim.verification_status == "verified" and records and records[-1].resulting_ref == self.memory.reference(claim_id):
             checks = []
@@ -217,6 +201,14 @@ class VerificationAgent:
                 return records[-1]
         checks, evidence, chunks = [], [], []
         self._dependencies(claim, checks)
+        if claim.claim_type == "argument":
+            try:
+                from agents.argument_contracts import validate_argument
+                validate_argument(claim, self.memory)
+                _check(checks, "argument_traceability", True,
+                    "Exact factual premises and constrained interpretation passed; interpretation truth is not independently proven")
+            except (ValueError, KeyError, TypeError) as exc:
+                _check(checks, "argument_traceability", False, str(exc), "missing")
         if claim.calculation_ref:
             self._calculation(claim, checks)
         for item in claim.evidence:
@@ -232,7 +224,7 @@ class VerificationAgent:
                     "Pinned evidence supports a conditional interpretation; this does not prove a speculative causal outcome")
             except (ImportError, ValueError, KeyError) as exc:
                 _check(checks, "risk_traceability", False, str(exc), "missing")
-        elif not claim.evidence and not claim.calculation_ref:
+        elif claim.claim_type != "argument" and not claim.evidence and not claim.calculation_ref:
             _check(checks, "factual_evidence", False, "Factual claim lacks independently retrievable evidence or engine artifact", "missing")
         if not checks:
             _check(checks, "missing_evidence", False, "No verifiable evidence", "missing")

@@ -4,19 +4,10 @@ Constrained to cite only Shared Memory claim IDs with
 verification_status == verified. Introduces no new evidence.
 """
 
-from __future__ import annotations
+from agents.argument_contracts import ArgumentBuilder
 
 
-class BullAgent:
+class BullAgent(ArgumentBuilder):
     """Constructs the evidence-backed bullish case."""
 
-    def build_case(self, verified_claim_ids: list[str]) -> dict[str, object]:
-        """Build the bull case from verified claims.
-
-        Args:
-            verified_claim_ids: Claim IDs with verification_status == verified only.
-
-        Returns:
-            Structured argument citing existing claim IDs only.
-        """
-        raise NotImplementedError
+    stance = "bull"

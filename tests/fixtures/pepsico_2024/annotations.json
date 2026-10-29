@@ -1,0 +1,169 @@
+{
+  "document": {
+    "case_id": "pepsico_2024",
+    "split": "development",
+    "source_url": "https://www.pepsico.com/docs/pepsico-5v9wci20/media/Files/investors/2024-pepsico-annual-report-01.pdf",
+    "annotation_status": "AI source-inspected development gold; human review pending",
+    "test_contamination": true,
+    "attempts": [
+      {
+        "url": "https://www.pepsico.com/docs/default-source/annual-reports/2024-pepsico-annual-report.pdf",
+        "http_status": 404
+      },
+      {
+        "url": "https://www.pepsico.com/docs/pepsico-5v9wci20/media/Files/investors/2024-pepsico-annual-report-01.pdf",
+        "http_status": 200
+      }
+    ],
+    "status": "source_inspected_development_gold",
+    "sha256": "2626c28e287a4137219963f0d1308f18223f5384467ee61da173678b5e1b4c6e",
+    "bytes": 3158326,
+    "title": "PepsiCo, Inc. FY2024 annual report",
+    "entity": "PepsiCo, Inc.",
+    "original_split": "test"
+  },
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "currency_context": {
+    "pdf_page": 34,
+    "quote": "Because our consolidated financial statements are presented in U.S. dollars"
+  },
+  "scale": 1000000,
+  "unit": "currency",
+  "current_start": "2023-12-31",
+  "prior_start": "2023-01-01",
+  "annual_header_dates": [
+    "2024-12-28",
+    "2023-12-30"
+  ],
+  "annotation_method": "AI independently inspected original source statement text/geometry and policy pages; six values transcribed and checked against raw PDF row columns, not production extractor outputs. No human review claimed. Reclassified from test into parser development after prior compatibility exposure.",
+  "annotation_status": "candidate source-inspected, not human-reviewed; ambiguity records remain authoritative",
+  "ambiguities": [
+    "Use consolidated net income 9626, not PepsiCo-attributable 9578.",
+    "Parser-development exposure after original test assignment; excluded from untouched held-out evaluation."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "91854",
+      "period_end": "2024-12-28",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated Statement of Income",
+      "row": "Net Revenue",
+      "column": "2024-12-28",
+      "source_row_quote": "Net Revenue $ 91,854 $ 91,471 $ 86,392",
+      "bbox": [
+        59.90259999999995,
+        103.18239999999992,
+        513.5998,
+        114.81399999999996
+      ]
+    },
+    {
+      "metric": "revenue",
+      "value": "91471",
+      "period_end": "2023-12-30",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated Statement of Income",
+      "row": "Net Revenue",
+      "column": "2023-12-30",
+      "source_row_quote": "Net Revenue $ 91,854 $ 91,471 $ 86,392",
+      "bbox": [
+        59.90259999999995,
+        103.18239999999992,
+        513.5998,
+        114.81399999999996
+      ]
+    },
+    {
+      "metric": "operating_income",
+      "value": "12887",
+      "period_end": "2024-12-28",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated Statement of Income",
+      "row": "Operating Profit",
+      "column": "2024-12-28",
+      "source_row_quote": "Operating Profit 12,887 11,986 11,512",
+      "bbox": [
+        59.837799999999845,
+        188.21079999999995,
+        513.5349999999999,
+        199.8424
+      ]
+    },
+    {
+      "metric": "net_income",
+      "value": "9626",
+      "period_end": "2024-12-28",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated Statement of Income",
+      "row": "Net income",
+      "column": "2024-12-28",
+      "source_row_quote": "Net income 9,626 9,155 8,978",
+      "bbox": [
+        59.78379999999976,
+        259.2424,
+        513.4809999999998,
+        270.6904
+      ]
+    },
+    {
+      "metric": "current_assets",
+      "value": "25826",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "65",
+      "table": "Consolidated Balance Sheet",
+      "row": "Total Current Assets",
+      "column": "2024-12-28",
+      "source_row_quote": "Total Current Assets 25,826 26,950",
+      "bbox": [
+        80.1670000000002,
+        243.61300000000023,
+        514.2280000000002,
+        253.6930000000002
+      ]
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "31536",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "65",
+      "table": "Consolidated Balance Sheet",
+      "row": "Total Current Liabilities",
+      "column": "2024-12-28",
+      "source_row_quote": "Total Current Liabilities 31,536 31,647",
+      "bbox": [
+        84.21700000000038,
+        423.16300000000007,
+        514.2280000000004,
+        433.24300000000005
+      ]
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "pepsico_2024-income",
+      "query": "Find the consolidated income statement revenue, income and fiscal column headers",
+      "relevant_pages": [
+        73
+      ],
+      "source_anchor": "Net Revenue"
+    },
+    {
+      "id": "pepsico_2024-balance",
+      "query": "Find total current assets and total current liabilities in the consolidated balance sheet",
+      "relevant_pages": [
+        77
+      ],
+      "source_anchor": "Total Current Assets"
+    }
+  ],
+  "split": "development",
+  "original_split": "test"
+}

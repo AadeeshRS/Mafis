@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from time import perf_counter, sleep
+from hashlib import sha256
 from typing import TypeVar
 from uuid import uuid4
 
@@ -76,6 +77,42 @@ class CallTelemetry(EvidenceModel):
     total_tokens: int | None = None
     thinking_tokens: int | None = None
     model_version: str | None = None
+    task: str | None = None
+    prompt_sha256: str | None = None
+    payload_sha256: str | None = None
+    source_chunk_ids: tuple[str,...] = ()
+
+
+class PersistentGenerationBudget(list):
+    """Workspace-local shared transport ledger; never reset on a new adapter/run."""
+    def __init__(self,path,maximum=12):
+        from pathlib import Path
+        self.path=Path(path)
+        if maximum!=12:
+            raise ValueError("Closeout generation cap is exactly 12")
+        self.state=json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {"maximum":maximum,"attempts":[],"stopped":False}
+        if self.state["maximum"]!=maximum or len(self.state["attempts"])>maximum:
+            raise ValueError("Invalid persisted generation budget")
+        super().__init__([maximum-len(self.state["attempts"])])
+    def _save(self):
+        self.path.parent.mkdir(parents=True,exist_ok=True)
+        temporary=self.path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(self.state,indent=2),encoding="utf-8")
+        temporary.replace(self.path)
+    def consume(self,request_id,model_id,attempt):
+        if self.state["stopped"]:
+            raise ModelUnavailable("Shared generation budget halted after provider access/transport failure")
+        if self[0]<=0:
+            raise ModelUnavailable("Shared generation request budget exhausted")
+        self[0]-=1
+        self.state["attempts"].append({"request_id":request_id,"model_id":model_id,"attempt":attempt,"status":"started"})
+        self._save() # Reserve before transport; interrupted attempts still count.
+    def record(self,event):
+        row=next(x for x in reversed(self.state["attempts"]) if x["request_id"]==event.request_id and x["attempt"]==event.attempt)
+        row.update(event.model_dump(mode="json"))
+        if event.status.startswith("transport_error") or event.status in ("billing_restriction","invalid_credential","model_or_project_access"):
+            self.state["stopped"]=True
+        self._save()
 
 
 class GeminiAdapter:
@@ -83,10 +120,12 @@ class GeminiAdapter:
         self.settings = settings or GeminiSettings.from_env()
         self._client = client
         self.allow_live = allow_live
+        self.execution_kind = "injected_sdk_test" if client is not None else "live" if allow_live else "disabled"
         self.mode = "injected SDK client (mocked)" if client is not None else "live enabled" if allow_live else "live disabled"
         self._sleep = sleeper
         self.request_budget = request_budget
         self.telemetry: list[CallTelemetry] = []
+        self.request_contexts = {}
 
     def _get_client(self):
         if self._client is not None:
@@ -112,8 +151,10 @@ class GeminiAdapter:
             output_tokens=getattr(usage, "candidates_token_count", None),
             total_tokens=getattr(usage, "total_token_count", None),
             thinking_tokens=getattr(usage, "thoughts_token_count", None),
-            model_version=getattr(response, "model_version", None))
+            model_version=getattr(response, "model_version", None),**self.request_contexts.get(request_id,{}))
         self.telemetry.append(event)
+        if isinstance(self.request_budget,PersistentGenerationBudget):
+            self.request_budget.record(event)
         # No credentials, prompts, retrieved source text, or raw exceptions in logs.
         logger.info(event.model_dump_json())
 
@@ -121,11 +162,17 @@ class GeminiAdapter:
         client = self._get_client()
         request_id = str(uuid4())
         contents = json.dumps(payload, ensure_ascii=True)
+        self.request_contexts[request_id]={"task":payload.get("task"),"prompt_sha256":sha256(system.encode()).hexdigest(),
+            "payload_sha256":sha256(json.dumps(payload,sort_keys=True,ensure_ascii=True).encode()).hexdigest(),
+            "source_chunk_ids":tuple(c["chunk_id"] for c in payload.get("chunks",[]) if isinstance(c,dict) and "chunk_id" in c)}
         for attempt in range(1, self.settings.max_retries + 2):
             if self.request_budget is not None:
                 if self.request_budget[0] <= 0:
                     raise ModelUnavailable("Shared generation request budget exhausted")
-                self.request_budget[0] -= 1
+                if isinstance(self.request_budget,PersistentGenerationBudget):
+                    self.request_budget.consume(request_id,self.settings.model_id,attempt)
+                else:
+                    self.request_budget[0] -= 1
             started = perf_counter()
             try:
                 response = client.models.generate_content(model=self.settings.model_id, contents=contents,

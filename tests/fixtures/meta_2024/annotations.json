@@ -1,0 +1,168 @@
+{
+  "document": {
+    "case_id": "meta_2024",
+    "split": "development",
+    "source_url": "https://s21.q4cdn.com/399680738/files/doc_financials/2024/ar/Meta-12-31-2024-10K-ARS.pdf",
+    "annotation_status": "AI source-inspected development gold; human review pending",
+    "test_contamination": true,
+    "attempts": [
+      {
+        "url": "https://investor.atmeta.com/financials/",
+        "http_status": 403
+      },
+      {
+        "url": "https://s21.q4cdn.com/399680738/files/doc_financials/2024/ar/Meta-12-31-2024-10K-ARS.pdf",
+        "http_status": 200
+      }
+    ],
+    "status": "source_inspected_development_gold",
+    "sha256": "9b81ad9b6ecb9e23b1d810b9cecabcad05e00386d24dd64b4cd44a5bab54a13f",
+    "bytes": 1892145,
+    "title": "Meta Platforms, Inc. FY2024 annual report",
+    "entity": "Meta Platforms, Inc.",
+    "original_split": "test"
+  },
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "currency_context": {
+    "pdf_page": 100,
+    "quote": "statements of these subsidiaries to U.S. dollars using month-end rates of exchange for assets and liabilities, and average rates"
+  },
+  "scale": 1000000,
+  "unit": "currency",
+  "current_start": "2024-01-01",
+  "prior_start": "2023-01-01",
+  "annual_header_dates": [
+    "2024-12-31",
+    "2023-12-31"
+  ],
+  "annotation_method": "AI independently inspected original source statement text/geometry and policy pages; six values transcribed and checked against raw PDF row columns, not production extractor outputs. No human review claimed. Reclassified from test into parser development after prior compatibility exposure.",
+  "annotation_status": "candidate source-inspected, not human-reviewed; ambiguity records remain authoritative",
+  "ambiguities": [
+    "Parser-development exposure after original test assignment; excluded from untouched held-out evaluation."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "164501",
+      "period_end": "2024-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "CONSOLIDATED STATEMENTS OF INCOME",
+      "row": "Revenue",
+      "column": "2024-12-31",
+      "source_row_quote": "Revenue $ 164,501 $ 134,902 $ 116,609",
+      "bbox": [
+        56.63,
+        128.51306599999998,
+        553.92,
+        138.51306599999998
+      ]
+    },
+    {
+      "metric": "revenue",
+      "value": "134902",
+      "period_end": "2023-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "CONSOLIDATED STATEMENTS OF INCOME",
+      "row": "Revenue",
+      "column": "2023-12-31",
+      "source_row_quote": "Revenue $ 164,501 $ 134,902 $ 116,609",
+      "bbox": [
+        56.63,
+        128.51306599999998,
+        553.92,
+        138.51306599999998
+      ]
+    },
+    {
+      "metric": "operating_income",
+      "value": "69380",
+      "period_end": "2024-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "CONSOLIDATED STATEMENTS OF INCOME",
+      "row": "Income from operations",
+      "column": "2024-12-31",
+      "source_row_quote": "Income from operations 69,380 46,751 28,944",
+      "bbox": [
+        56.63,
+        233.51306599999998,
+        553.92,
+        243.51306599999998
+      ]
+    },
+    {
+      "metric": "net_income",
+      "value": "62360",
+      "period_end": "2024-12-31",
+      "pdf_page": 89,
+      "printed_page": "87",
+      "table": "CONSOLIDATED STATEMENTS OF INCOME",
+      "row": "Net income",
+      "column": "2024-12-31",
+      "source_row_quote": "Net income $ 62,360 $ 39,098 $ 23,200",
+      "bbox": [
+        56.63,
+        293.513096,
+        553.92,
+        303.513096
+      ]
+    },
+    {
+      "metric": "current_assets",
+      "value": "100045",
+      "period_end": "2024-12-31",
+      "pdf_page": 88,
+      "printed_page": "86",
+      "table": "CONSOLIDATED BALANCE SHEETS",
+      "row": "Total current assets",
+      "column": "2024-12-31",
+      "source_row_quote": "Total current assets 100,045 85,365",
+      "bbox": [
+        74.63,
+        218.51306599999998,
+        553.92,
+        228.51306599999998
+      ]
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "33596",
+      "period_end": "2024-12-31",
+      "pdf_page": 88,
+      "printed_page": "86",
+      "table": "CONSOLIDATED BALANCE SHEETS",
+      "row": "Total current liabilities",
+      "column": "2024-12-31",
+      "source_row_quote": "Total current liabilities 33,596 31,960",
+      "bbox": [
+        74.63,
+        413.513096,
+        553.92,
+        423.513096
+      ]
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "meta_2024-income",
+      "query": "Find the consolidated income statement revenue, income and fiscal column headers",
+      "relevant_pages": [
+        89
+      ],
+      "source_anchor": "Revenue"
+    },
+    {
+      "id": "meta_2024-balance",
+      "query": "Find total current assets and total current liabilities in the consolidated balance sheet",
+      "relevant_pages": [
+        88
+      ],
+      "source_anchor": "Total current assets"
+    }
+  ],
+  "split": "development",
+  "original_split": "test"
+}

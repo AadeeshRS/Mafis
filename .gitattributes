@@ -1,3 +1,6 @@
 # Preserve official document fixtures and image assets byte-for-byte.
 *.pdf binary
 *.png binary
+# Preserve hash-sensitive annotation and Batch 2 manifest bytes on every platform.
+tests/fixtures/**/annotations*.json -text
+tests/fixtures/batch2_cases.json -text

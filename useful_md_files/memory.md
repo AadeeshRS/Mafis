@@ -226,9 +226,82 @@ Evidence gaps and routing instructions are structured state used by Planner; the
 - `append_calculation(artifact)` / `get_calculation(calculation_ref)`
 - `get_calculations()` / `get_calculation_freshness(calculation_ref)`
 
-### Planned later-phase helpers (not implemented)
+### Batch 1 checked eligibility and gate snapshots
 
-- `get_verification_health()` → returns aggregate counts and rates for the Health Gate
-- `get_unresolved()` → returns unresolved claims and contradictions for the final report
+Storage acceptance remains compatible with legacy claim records. Independent
+verification additionally enforces `Claim.verification_shape_error()`: supported
+numeric primitives/metrics use the source-cell/engine paths, while Document
+quotations and canonical Market/Risk narrative forms have no structured numeric
+value, unit, currency or non-unit scale. Document quotations also have no period,
+accounting scope or calculation reference. Market dates and canonical Risk
+period/scope/calculation dependencies retain their existing contracts. Numeric
+strings are structured values; digits inside quotation text are not. Argument
+verification remains outside Batch 1. Unsupported shapes produce explicit
+non-verified records without rewriting historical claims, and cannot qualify
+through a legacy successful quote-only check record.
+
+`is_current_verified(claim_id)` requires a supported shape, exact successful
+verification record and recursively current checked support/calculation inputs.
+`get_unresolved()["claims"]` returns every current claim failing that same test;
+it does not hide preset verified statuses or transitive stale dependencies.
+Batch 2 contradiction storage is described below.
+
+`VerificationHealthGate.evaluate(issues=...)` retains an immutable per-run routing
+snapshot in Shared Memory. `GateResult` includes `evaluation_id`, `run_id` and all
+exact current `claim_refs`. The snapshot retains the original threshold/issues
+independently of any report map. `get_health_gate_context()` returns a detached
+copy of the latest result/issues. Report validation compares the entire supplied
+gate with that authoritative result and recomputes it against current memory,
+using the stored policy/issues. Missing, modified, cross-run and stale results
+are rejected; new explicit evaluations supersede earlier gate snapshots. A fresh
+map can reevaluate current state while preserving the original policy/issues.
+Gate snapshots are routing metadata, not claims or verification promotions.
+
+`get_verification_health()` is a read-only aggregate and does not replace gate
+policy. All gate context remains in-process; no database or global registry exists.
+
+### Implemented Batch 1 helpers and planned later-phase helpers
+
+- `get_verification_health()` → implemented aggregate counts and rates
+- `get_unresolved()` → implemented ineligible current claims and open/unresolved contradictions
 - `get_claims_by_metric(metric, period=None, entity=None)` → supports structured contradiction checks
 - `get_claims_by_ids(claim_ids)` → returns referenced verified claims for Bull/Bear/Critic
+
+### Batch 2 implemented contracts
+
+`Claim.argument` accepts only structured Bull/Bear content: a stance, one bounded
+qualified interpretation, exact factual premise snapshots, counterevidence and a
+shared snapshot hash. Numeric values/dimensions/source identities must match the
+current independently checked supporting claims. Arbitrary legacy argument shapes
+remain readable but ineligible. Arguments do not enter the factual gate denominator.
+Their successful check records mean traceability and constraints, not interpretive
+truth. They retain `single_source` conservatively; repeated references never inflate
+independent support. Evidence gaps are typed routing requests, never factual claims.
+
+`append_contradiction` stores separate append-only `ContradictionRecord` revisions
+for numerical, temporal, unit, source, logical, causal, risk-interpretation and
+missing-evidence findings. Original implicated versions remain pinned when a finding
+is revised/resolved. Mechanical coverage is bounded to explicit structured rules.
+`get_contradictions(history=True)` returns the audit trail.
+
+`ReanalysisRequest` and `RetryDecision` record exact affected references, implicated
+components, operations/metrics, requested correction, execution scope and budgets.
+Planner alone calls the private allocation boundary; each memory has a hard maximum
+of one analytical correction. Unsupported/irrecoverable requests do not trigger a
+full restart. Historical artifacts and unchanged checked claim versions survive.
+
+`get_health_gate_history()` exports all authoritative snapshots. Argument additions
+can stale the prior snapshot despite not changing its denominator; full routing
+refreshes at legitimate state boundaries. Final maps validate current contradictions,
+retry decisions, gate state and the original exclusion/disclosure invariants.
+
+
+Closeout validation derives every section's exact membership from the current
+eligible entries using the same rules as map construction. This includes stance,
+author/type, Sources and Support, and multiplicity. Legitimate empty argument
+sections remain legal when no eligible arguments exist. Additional caller issues
+remain disclosures. Argument numeric snapshots reject malformed values and NaN/
+infinities as schema errors; valid finite negative Decimals remain exact. A missing
+printed footer never substitutes a guessed page: the one-based PDF page remains
+authoritative. Fresh source context verifies comparative header dates in either
+ordered column direction while canonical annual anchors remain newest first.

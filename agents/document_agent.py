@@ -71,8 +71,9 @@ def collect_context(retriever, query, filters, metrics):
 
 
 class DocumentAgent:
-    def __init__(self, memory: SharedMemory, retriever, llm, *, source_id: str):
+    def __init__(self, memory: SharedMemory, retriever, llm, *, source_id: str, allow_revisions=False, run_iteration=0):
         self.memory, self.retriever, self.llm, self.source_id = memory, retriever, llm, source_id
+        self.allow_revisions, self.run_iteration = allow_revisions, run_iteration
 
     def extract_primitives(self, query: str, filters: dict[str, Any] | None = None,
                            *, metrics: tuple[str, ...] = ("revenue", "operating_income", "net_income",
@@ -135,7 +136,12 @@ class DocumentAgent:
                     existing = self.memory.get_current(claim.claim_id)
                 except KeyError:
                     existing = self.memory.append(claim)
-                if existing.model_dump(exclude={"timestamp"}) != claim.model_dump(exclude={"timestamp"}):
+                if self.allow_revisions:
+                    ignored = {"timestamp", "version", "verification_status", "support_level", "run_iteration"}
+                    if existing.model_dump(exclude=ignored) != claim.model_dump(exclude=ignored):
+                        existing = self.memory.append(claim.model_copy(update={"version": existing.version+1,
+                            "run_iteration":self.run_iteration}))
+                elif existing.model_dump(exclude={"timestamp"}) != claim.model_dump(exclude={"timestamp"}):
                     raise ValueError("Existing claim conflicts with this extraction")
                 references.append(self.memory.reference(existing.claim_id))
             except ValueError:

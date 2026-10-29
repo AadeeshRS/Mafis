@@ -86,7 +86,7 @@ _MONTHS = {name: i for i, name in enumerate(
 _NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 _CURRENCY_QUOTE = "We use the U.S. dollar as our functional currency for our subsidiaries."
 _FISCAL_WEEKS = re.compile(r"Fiscal years (\d{4}), (\d{4}) and (\d{4}) were all (52|53)-\s*week years\.")
-_PRESENTATION_CURRENCY = re.compile(r"(?:financial statements are presented in U\.S\. dollars|net sales and gross margins as expressed in U\.S\. dollars)", re.I)
+_PRESENTATION_CURRENCY = re.compile(r"(?:financial statements are presented in U\.S\. dollars|net sales and gross margins as expressed in U\.S\. dollars|functional currency of the Company.{1,3}s foreign subsidiaries is the U\.S\. dollar|(?:financial )?reporting currency is (?:the )?U\.S\. dollars?|translate the financial statements of these subsidiaries to U\.S\. dollars)", re.I)
 
 
 def normalize_number(raw: str) -> Decimal:
@@ -128,9 +128,6 @@ def extract_statement(page: StatementPage, title: str, source: SourceDocument
         return claims, failures
     if sum(line.text == title for line in page.lines) != 1:
         fail("ambiguous_statement", "Expected exactly one exact statement heading")
-        return claims, failures
-    if page.printed_page is None:
-        fail("missing_page_label", "Cannot identify a unique printed footer page")
         return claims, failures
     if source.currency != "USD" or source.currency_evidence is None:
         fail("missing_currency", "An explicit supported USD context is required; '$' alone is insufficient")
@@ -215,6 +212,55 @@ def extract_statement(page: StatementPage, title: str, source: SourceDocument
     return claims, failures
 
 
+def source_text_lines(page):
+    """Use native PDF glyph geometry; ignore a duplicate tagged OCR overlay.
+
+    The existing OCRPageInfo layer is discarded only if native glyphs coexist.
+    No OCR, glyph guessing, or source-specific substitutions are performed.
+    """
+    chars = page.chars
+    if any(c.get("tag") == "OCRPageInfo" for c in chars) and any(
+            c.get("tag") not in (None, "OCRPageInfo") for c in chars):
+        page = page.filter(lambda obj: obj.get("tag") != "OCRPageInfo")
+    return tuple(TextLine(x["text"], (x["x0"], x["top"], x["x1"], x["bottom"]))
+                 for x in page.extract_text_lines())
+
+
+def comparative_dates(text):
+    """Bounded date-column grammar, shared with fresh source verification."""
+    text = " ".join(text.split())
+    text = re.sub(r"^(?:Fiscal )?Years? ended\s+","",text,flags=re.I)
+    full = list(_DATE.finditer(text))
+    if len(full) >= 2:
+        residual = _DATE.sub("", text).strip()
+        residual = re.sub(r"\band\b|,","",residual,flags=re.I).strip()
+        if residual:
+            raise ValueError("Unexpected prose in comparative date header")
+        dates = tuple(date(int(m[3]), _MONTHS[m[1][:3]], int(m[2])) for m in full)
+    else:
+        parts = list(re.finditer(r"([A-Z][a-z]+)\s*(\d{1,2}),", text))
+        if len(parts) >= 2:
+            gaps = [text[a.end():b.start()] for a, b in zip(parts, parts[1:])]
+            years = text[parts[-1].end():].strip()
+            if text[:parts[0].start()].strip() or any(g.strip() for g in gaps) or not re.fullmatch(r"\d{4}(?:\s+\d{4})+", years):
+                raise ValueError("Invalid split comparative header")
+            years = years.split()
+            if len(parts) != len(years):
+                raise ValueError("Year-column count mismatch")
+            dates = tuple(date(int(y), _MONTHS[m[1][:3]], int(m[2])) for m,y in zip(parts,years))
+        elif len(parts)==1:
+            m=parts[0]
+            years=text[m.end():].strip()
+            if text[:m.start()].strip() or not re.fullmatch(r"\d{4}(?:\s+\d{4})+",years):
+                raise ValueError("Invalid shared-date header")
+            dates=tuple(date(int(y),_MONTHS[m[1][:3]],int(m[2])) for y in years.split())
+        else:
+            raise ValueError("No complete comparative dates")
+    if len(dates)<2 or len(set(dates))!=len(dates) or dates not in (tuple(sorted(dates,reverse=True)),tuple(sorted(dates))):
+        raise ValueError("Comparative dates must be unique and chronologically ordered")
+    return dates
+
+
 def extract_financial_facts(path: str | Path, *, source_url: str,
                             title: str, entity: str) -> ExtractionResult:
     """Extract the six pilot facts from the PDF, without fixture/gold inputs.
@@ -236,18 +282,24 @@ def extract_financial_facts(path: str | Path, *, source_url: str,
     calendars: list[tuple[tuple[tuple[int, int], ...], Evidence]] = []
     alternate = {"income": [], "balance": []}
     presentation_currency = []
+    undecoded_pages=[]
     try:
         with pdfplumber.open(BytesIO(data)) as pdf:
             for number, page in enumerate(pdf.pages, 1):
-                lines = tuple(TextLine(line["text"], (line["x0"], line["top"], line["x1"], line["bottom"]))
-                              for line in page.extract_text_lines())
+                lines = source_text_lines(page)
                 parsed = StatementPage(number, page.height, lines)
+                if sum(len(re.findall(r"\(cid:\d+\)",x.text)) for x in lines)>100:
+                    undecoded_pages.append(number)
+                # A statement title precedes its first table scale. Mentions
+                # below another statement's table are not new primary tables.
+                first_scale=next((i for i,l in enumerate(lines) if re.search(r"\((?:Amounts |Dollars )?in (?:thousands|millions|billions)\b",l.text,re.I)),len(lines))
+                heading_lines=lines[:first_scale]
                 for statement in statements:
-                    if any(line.text == statement for line in lines):
+                    if any(line.text == statement for line in heading_lines):
                         statements[statement].append(parsed)
-                for kind, pattern in (("income", r"consolidated statements of (income|operations)"),
-                                      ("balance", r"consolidated balance sheets")):
-                    if any(re.fullmatch(pattern, line.text, re.I) and line.text not in statements for line in lines):
+                for kind, pattern in (("income", r"consolidated statements? of (income|operations)"),
+                                      ("balance", r"consolidated balance sheets?")):
+                    if any(re.fullmatch(pattern, line.text, re.I) and line.text not in statements for line in heading_lines):
                         alternate[kind].append(parsed)
                 for index, line in enumerate(lines):
                     if _CURRENCY_QUOTE in line.text:
@@ -302,9 +354,21 @@ def extract_financial_facts(path: str | Path, *, source_url: str,
             code = "missing_statement" if not pages else "ambiguous_statement"
             failures.append(ExtractionFailure(code, f"Expected one {statement}, found {len(pages)}"))
             continue
-        found, errors = extract_statement(pages[0], statement, source)
+        # Preserve the original strict profile and its exact locators. Other
+        # date/header placements use the bounded comparative profile.
+        strict_scale = [x for x in pages[0].lines if re.fullmatch(r"\(In (thousands|millions|billions)(?:, except [^)]+)?\)", x.text)]
+        strict_header = [x for x in pages[0].lines if len(list(_DATE.finditer(x.text))) >= 2
+                         and not _DATE.sub("", x.text).strip() and strict_scale and x.bbox[1] > strict_scale[0].bbox[1]]
+        if len(strict_scale) == 1 and len(strict_header) == 1:
+            found, errors = extract_statement(pages[0], statement, source)
+        else:
+            found, errors, anchors = extract_alternate_statement(pages[0], kind, source)
+            if anchors is not None:
+                source = source.model_copy(update={"annual_period_ends": tuple(anchors[0]), "annual_period_evidence": anchors[1]})
         claims.extend(found)
         failures.extend(errors)
+    if undecoded_pages and any(f.code=="missing_statement" for f in failures):
+        failures.append(ExtractionFailure("unsupported_text_encoding","Unmapped CID glyphs prevent unambiguous text decoding; no glyph guessing or OCR fallback"))
     return ExtractionResult(source, tuple(claims), tuple(failures))
 
 
@@ -328,60 +392,69 @@ def _parse_alternate_statement(page: StatementPage, kind: str, source: SourceDoc
         failure("unsupported_statement", "Unsupported statement kind")
         return claims, failures, None
     headings = [x.text for x in page.lines if re.fullmatch(
-        r"consolidated statements of (income|operations)" if kind == "income" else r"consolidated balance sheets", x.text, re.I)]
+        r"consolidated statements? of (income|operations)" if kind == "income" else r"consolidated balance sheets?", x.text, re.I)]
     if len(headings) != 1:
         failure("ambiguous_statement", "Require exactly one consolidated statement heading")
         return claims, failures, None
     heading = headings[0]
-    scales = [(line, re.match(r"\(In (thousands|millions|billions)\b", line.text, re.I)) for line in page.lines]
-    scales = [(line, m) for line, m in scales if m]
-    if len(scales) != 1 or page.printed_page is None or source.currency != "USD":
-        failure("missing_table_context", "Require a unique scale, printed page, and explicit USD presentation")
+    # Context occurs before the first body row; headers may wrap or precede scale.
+    first_body = next((i for i,x in enumerate(page.lines) if re.match(
+        r"(?:net\s*revenue|total net sales|revenue|net operating revenues|total revenues|assets|cash)", x.text, re.I)), len(page.lines))
+    context = page.lines[:first_body]
+    scales = [(x,m) for x in context if (m:=re.search(r"\((?:Amounts |Dollars )?[Ii]n (thousands|millions|billions)\b",x.text,re.I))]
+    if source.currency!="USD" or source.currency_evidence is None:
+        failure("missing_currency", "Require explicit source-backed USD context; sales currency and dollar signs are insufficient")
+        return claims, failures, None
+    if len(scales)!=1:
+        failure("missing_table_context", "Require one explicit financial table scale")
         return claims, failures, None
     scale_line, scale_match = scales[0]
-    scale = {"thousands": 1000, "millions": 1000000, "billions": 1000000000}[scale_match[1].lower()]
-    headers = []
-    for index, line in enumerate(page.lines):
-        if line.bbox[1] <= scale_line.bbox[1]:
+    scale = {"thousands":1000,"millions":1000000,"billions":1000000000}[scale_match[1].lower()]
+    headers=[]
+    for i,line in enumerate(context):
+        full=list(_DATE.finditer(line.text))
+        header=line
+        if len(full)>=2:
+            prefix=line.text[:full[0].start()].strip()
+            if prefix and re.search(r"\((?:Amounts |Dollars )?In (?:thousands|millions|billions)",prefix,re.I):
+                if not re.fullmatch(r"(?:Years? Ended )?\((?:Amounts |Dollars )?In (?:thousands|millions|billions)(?:, [^)]+)?\)",prefix,re.I):
+                    continue
+                header=TextLine(line.text[full[0].start():],line.bbox)
+        elif re.search(r"[A-Z][a-z]+\s*\d{1,2},",line.text) and not full and i+1<len(context):
+            following=context[i+1]
+            if re.fullmatch(r"\d{4}(?:\s+\d{4})+",following.text):
+                header=TextLine(line.text+"\n"+following.text,(min(line.bbox[0],following.bbox[0]),line.bbox[1],max(line.bbox[2],following.bbox[2]),following.bbox[3]))
+        try:
+            dates=comparative_dates(header.text)
+        except (ValueError,KeyError):
             continue
-        full = list(_DATE.finditer(line.text))
-        if full and re.fullmatch(r"(?:Year[s]? [Ee]nded )?" + re.escape(full[0][0]) + r"(?:\s+\d{4})*", line.text):
-            m = full[0]
-            years = [int(v) for v in re.findall(r"\b\d{4}\b", line.text)]
-            dates = [date(y, _MONTHS[m[1][:3]], int(m[2])) for y in years]
-            if len(dates) >= 2:
-                headers.append((line, dates))
-        parts = list(re.finditer(r"([A-Z][a-z]+)\s+(\d{1,2}),", line.text))
-        if len(parts) >= 2 and index + 1 < len(page.lines) and not full:
-            following = page.lines[index + 1]
-            if re.fullmatch(r"\d{4}(?:\s+\d{4})+", following.text):
-                years = [int(y) for y in following.text.split()]
-                if len(years) == len(parts):
-                    dates = [date(y, _MONTHS[m[1][:3]], int(m[2])) for m, y in zip(parts, years)]
-                    box = (min(line.bbox[0], following.bbox[0]), line.bbox[1], max(line.bbox[2], following.bbox[2]), following.bbox[3])
-                    headers.append((TextLine(line.text + "\n" + following.text, box), dates))
-    if len(headers) != 1:
-        failure("ambiguous_period", "Expected one complete, supported comparative date header")
-        return claims, failures, None
-    header, dates = headers[0]
-    if len(set(dates)) != len(dates) or dates != sorted(dates, reverse=True):
-        failure("ambiguous_period", "Comparative dates must be unique, newest first")
-        return claims, failures, None
+        headers.append((header,list(dates)))
+    if len(headers)!=1:
+        failure("ambiguous_period", "Expected one complete supported comparative date header")
+        return claims,failures,None
+    header,dates=headers[0]
     if kind == "income" and not any(re.search(r"\byears? ended\b", x.text, re.I) for x in page.lines):
         failure("missing_period_kind", "Annual income durations must be explicit")
         return claims, failures, None
-    specs = (("revenue", ("Total net sales", "Net Operating Revenues", "Revenue"), 2),
-             ("operating_income", ("Operating income",), 1),
-             ("net_income", ("Consolidated Net Income", "Net income"), 1)) if kind == "income" else (
+    specs = (("revenue", ("Total net sales", "Net Operating Revenues", "Revenue", "Net revenue", "Total revenues"), 2),
+             ("operating_income", ("Operating income", "Operating income (loss)", "Operating Profit", "Income from operations"), 1),
+             ("net_income", ("Consolidated Net Income", "Net income", "Net income (loss)"), 1)) if kind == "income" else (
              ("current_assets", ("Total current assets",), 1), ("current_liabilities", ("Total current liabilities",), 1))
     for metric, aliases, count in specs:
-        rows = [(line, label) for line in page.lines for label in aliases
-                if re.match(re.escape(label) + r"\s+(?=\$|\(?[+\-\u2212\d]|[\u2014\u2013])", line.text, re.I) and line.bbox[1] > header.bbox[1]]
-        if len(rows) != 1:
+        rows=[]
+        for line in page.lines:
+            for label in aliases:
+                # Optional whitespace between words and dotted leaders preserve
+                # the actual row quote; no values or signs are reconstructed.
+                pattern=r"\s*".join(re.escape(word) for word in label.split())
+                m=re.match(pattern+r"(?=\s|\.{2,}|\$)(?:\s|\.)+(?=\$|\(?[+\-\u2212\d])",line.text,re.I)
+                if m and line.bbox[1]>header.bbox[1]:
+                    rows.append((line,line.text[:m.end()].rstrip(" ."),m.end()))
+        if len(rows)!=1:
             failure("missing_row" if not rows else "ambiguous_row", "Require exactly one consolidated total row", metric)
             continue
-        row, label = rows[0]
-        values = row.text[len(label):].replace("$", "").split()
+        row,label,end_label=rows[0]
+        values=row.text[end_label:].replace("$", "").split()
         try:
             if len(values) != len(dates):
                 raise ValueError("Column/value count mismatch")
@@ -389,7 +462,8 @@ def _parse_alternate_statement(page: StatementPage, kind: str, source: SourceDoc
         except ValueError as exc:
             failure("invalid_value", str(exc), metric)
             continue
-        for column in range(count):
+        selected=sorted(range(len(dates)),key=lambda i:dates[i],reverse=True)[:count]
+        for column in selected:
             end = dates[column]
             column_label = end.strftime("%B %d, %Y").replace(" 0", " ")
             period = FiscalPeriod(kind="duration" if kind == "income" else "instant", end_date=end,
@@ -403,7 +477,7 @@ def _parse_alternate_statement(page: StatementPage, kind: str, source: SourceDoc
                 value=numbers[column], unit="currency", currency="USD", scale=scale, period=period,
                 claim=f"{evidence.row_label}: {values[column]} USD; {period.label}", evidence=(evidence,),
                 support_level="single_source", verification_status="pending"))
-    anchors = (dates, _evidence(source, page, header, heading, f"pdf-page={page.page};table={heading};annual-period-header")) if kind == "income" else None
+    anchors = (sorted(dates,reverse=True), _evidence(source, page, header, heading, f"pdf-page={page.page};table={heading};annual-period-header")) if kind == "income" else None
     return claims, failures, anchors
 
 
@@ -442,8 +516,7 @@ def prepare_document(path: str | Path, *, source_url: str, title: str, entity: s
     with pdfplumber.open(BytesIO(data)) as pdf:
         count = len(pdf.pages)
         for number, page in enumerate(pdf.pages, 1):
-            lines = tuple(TextLine(item["text"], (item["x0"], item["top"], item["x1"], item["bottom"]))
-                          for item in page.extract_text_lines())
+            lines = source_text_lines(page)
             parsed = StatementPage(number, page.height, lines)
             text = "\n".join(line.text for line in lines)
             if text.strip():

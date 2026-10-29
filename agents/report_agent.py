@@ -2,22 +2,33 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from html import escape
 from typing import Literal
 
 from agents.contracts import AgentIssue
-from agents.verification_gate import GateResult
+from agents.verification_gate import GateResult, VerificationHealthGate
+from config import VERIFICATION_HEALTH_GATE_THRESHOLD
 from engine.financial_engine import FinancialEngine
 from memory.shared_memory import (
     ClaimVersionRef, Evidence, EvidenceModel, SharedMemory, SupportLevel, VerificationStatus,
+    ContradictionRecord, RetryDecision,
 )
 from rag.retriever import RetrievalUnavailable
 
 
 SectionTitle = Literal["Executive Summary", "Company Overview", "Financial Health", "Sources",
-                       "Support and Uncertainty", "Limitations", "Market Context", "Risk Assessment"]
+                       "Support and Uncertainty", "Limitations", "Market Context", "Risk Assessment", "Bull Case", "Bear Case", "Key Contradictions"]
 _TITLES = ("Executive Summary", "Company Overview", "Financial Health", "Sources", "Support and Uncertainty", "Limitations")
 _EXTENDED_TITLES = _TITLES[:3] + ("Market Context", "Risk Assessment") + _TITLES[3:]
+_FULL_TITLES = _EXTENDED_TITLES[:5] + ("Bull Case", "Bear Case", "Key Contradictions") + _EXTENDED_TITLES[5:]
+_EXTENDED_LIMITATIONS = (
+    "Independent verification checks indexed source evidence and deterministic replay; it does not establish external truth or source independence.",
+    "Market context uses constrained quotations with historical/as-of dates, not live prices or current news inference.",
+    "Risk findings use constrained templates and express possibilities; traceability does not prove causal outcomes or exhaustive risk coverage.",
+    "The Health Gate threshold is configurable and remains uncalibrated on held-out validation data.",
+    "Batch 1 does not execute Bull/Bear, Critic, or targeted re-analysis; a blocked gate produces a partial report.",
+)
 
 
 class AnalysisEntry(EvidenceModel):
@@ -42,6 +53,9 @@ class AnalysisMap(EvidenceModel):
     sections: tuple[AnalysisSection, ...]
     issues: tuple[AgentIssue, ...] = ()
     extended: bool = False
+    full: bool = False
+    contradictions: tuple[ContradictionRecord, ...] = ()
+    retry_decisions: tuple[RetryDecision, ...] = ()
     health_gate: GateResult | None = None
     excluded_claim_refs: tuple[ClaimVersionRef, ...] = ()
     limitations: tuple[str, ...] = (
@@ -62,9 +76,9 @@ def _safe(text):
 
 
 class ReportAgent:
-    def __init__(self, memory: SharedMemory, retriever, *, extended: bool = False):
+    def __init__(self, memory: SharedMemory, retriever, *, extended: bool = False, full: bool = False):
         self.memory, self.retriever = memory, retriever
-        self.extended = extended
+        self.extended, self.full = extended or full, full
 
     def _source_claim(self, claim):
         if not claim.evidence or not all(self.retriever.validate_evidence(e) for e in claim.evidence):
@@ -86,13 +100,13 @@ class ReportAgent:
             raise ValueError("Raw numeric fields differ from the cited source cell")
 
     def _entry(self, claim) -> AnalysisEntry:
+        shape_error = claim.verification_shape_error()
+        if shape_error is not None:
+            raise ValueError(shape_error)
         if claim.verification_status not in ("pending", "verified") or claim.support_level == "unsupported":
             raise ValueError("Claim has unresolved or insufficient support")
         if self.extended:
-            reference = self.memory.reference(claim.claim_id)
-            records = self.memory.get_verification_records(claim.claim_id)
-            if claim.verification_status != "verified" or not any(
-                    r.resulting_ref == reference and r.outcome == "verified" for r in records):
+            if not self.memory.is_current_verified(claim.claim_id):
                 raise ValueError("Extended reports require an exact independent verification record")
             if self.memory.get_dependency_freshness(claim.claim_id) != "current":
                 raise ValueError("Claim dependencies are superseded")
@@ -126,6 +140,13 @@ class ReportAgent:
                     calendar = doc.fiscal_calendar_evidence or doc.annual_period_evidence
                     if calendar is not None:
                         evidence.append(calendar)
+        elif self.full and claim.claim_type == "argument":
+            from agents.argument_contracts import validate_argument
+            validate_argument(claim,self.memory)
+            dependency_refs = claim.candidate_claim_refs
+            for reference in dependency_refs:
+                evidence.extend(self._entry(self.memory.resolve(reference)).evidence)
+            assumptions.append("Argument validation establishes constrained traceability, not truth of an interpretation.")
         elif self.extended and claim.claim_type == "risk" and claim.agent == "RiskAgent":
             from agents.risk_agent import validate_risk_claim
             validate_risk_claim(claim, self.memory)
@@ -151,43 +172,116 @@ class ReportAgent:
             calculation_ref=claim.calculation_ref, input_refs=input_refs, dependency_refs=dependency_refs, support_level=claim.support_level,
             verification_status=claim.verification_status, assumptions=tuple(dict.fromkeys(assumptions)))
 
-    def build_analysis_map(self, issues: tuple[AgentIssue, ...] = (), *, execution_mode="not recorded", health_gate=None) -> AnalysisMap:
-        entries, rejected, excluded = [], list(issues), []
+    def _collect_entries(self):
+        """Derive entries and required exclusion disclosures from current rules."""
+        entries, issues, excluded = [], [], []
         for claim in self.memory.get_claims():
             try:
                 entries.append(self._entry(claim))
             except (ValueError, KeyError, RetrievalUnavailable) as exc:
-                rejected.append(AgentIssue(code="report_claim_excluded", message=f"{claim.metric or claim.claim_type}: {exc}"))
+                issues.append(AgentIssue(code="report_claim_excluded", message=f"{claim.metric or claim.claim_type}: {exc}"))
                 excluded.append(self.memory.reference(claim.claim_id))
-        financial = tuple(e for e in entries if self.memory.resolve(e.claim_ref).claim_type in ("raw_primitive", "derived_metric"))
-        company = tuple(e for e in entries if self.memory.resolve(e.claim_ref).claim_type == "qualitative"
-                        and self.memory.resolve(e.claim_ref).agent == "DocumentAgent")
-        summary = tuple(e for e in financial if e.calculation_ref)
-        all_entries = tuple(entries)
-        section_entries = (summary, company, financial, all_entries, all_entries, ())
+        return entries, tuple(issues), tuple(excluded)
+
+    def _section_membership(self, entries):
+        """One authoritative inclusion rule for construction and validation."""
+        all_entries=tuple(entries)
+        def select(predicate):
+            return tuple(e for e in all_entries if predicate(self.memory.resolve(e.claim_ref)))
+        membership={
+            "Executive Summary":select(lambda c:c.claim_type=="derived_metric"),
+            "Company Overview":select(lambda c:c.claim_type=="qualitative" and c.agent=="DocumentAgent"),
+            "Financial Health":select(lambda c:c.claim_type in ("raw_primitive","derived_metric")),
+            "Sources":all_entries,"Support and Uncertainty":all_entries,"Limitations":(),
+        }
+        if self.extended:
+            membership.update({"Market Context":select(lambda c:c.claim_type=="qualitative" and c.agent=="MarketAgent"),
+                "Risk Assessment":select(lambda c:c.claim_type=="risk" and c.agent=="RiskAgent")})
+        if self.full:
+            membership.update({"Bull Case":select(lambda c:c.claim_type=="argument" and c.agent=="Bull" and c.argument.stance=="bull"),
+                "Bear Case":select(lambda c:c.claim_type=="argument" and c.agent=="Bear" and c.argument.stance=="bear"),
+                "Key Contradictions":()})
+        return membership
+
+    def build_analysis_map(self, issues: tuple[AgentIssue, ...] = (), *, execution_mode="not recorded", health_gate=None) -> AnalysisMap:
+        if self.extended:
+            if health_gate is None:
+                context = self.memory.get_health_gate_context()
+                original_issues = tuple(AgentIssue.model_validate(i) for i in context["issues"]) if context else ()
+                threshold = context["result"]["threshold"] if context else VERIFICATION_HEALTH_GATE_THRESHOLD
+                issues = tuple(dict.fromkeys(original_issues + tuple(issues)))
+                health_gate = VerificationHealthGate(self.memory, threshold).evaluate(issues=issues)
+        if self.extended or health_gate is not None:
+            original_issues = VerificationHealthGate(self.memory).validate_result(health_gate)
+            issues = tuple(dict.fromkeys(original_issues + tuple(issues)))
+            if health_gate.decision == "blocked":
+                blocked = AgentIssue(code="health_gate_blocked", message=health_gate.reason)
+                issues = tuple(dict.fromkeys(issues + (blocked,)))
+        entries, exclusion_issues, excluded = self._collect_entries()
+        rejected = list(issues) + list(exclusion_issues)
+        membership=self._section_membership(entries)
         titles, options = _TITLES, {}
         if self.extended:
-            market = tuple(e for e in entries if self.memory.resolve(e.claim_ref).agent == "MarketAgent")
-            risks = tuple(e for e in entries if self.memory.resolve(e.claim_ref).claim_type == "risk")
             titles = _EXTENDED_TITLES
-            section_entries = (summary, company, financial, market, risks, all_entries, all_entries, ())
-            options["limitations"] = (
-                "Independent verification checks indexed source evidence and deterministic replay; it does not establish external truth or source independence.",
-                "Market context uses constrained quotations with historical/as-of dates, not live prices or current news inference.",
-                "Risk findings use constrained templates and express possibilities; traceability does not prove causal outcomes or exhaustive risk coverage.",
-                "The Health Gate threshold is configurable and remains uncalibrated on held-out validation data.",
-                "Batch 1 does not execute Bull/Bear, Critic, or targeted re-analysis; a blocked gate produces a partial report.",
-            )
+            options["limitations"] = _EXTENDED_LIMITATIONS
+        if self.full:
+            titles = _FULL_TITLES
+            options["limitations"] = _EXTENDED_LIMITATIONS[:-1] + (
+                "Bull/Bear are bounded model-selected interpretations; Critic covers explicit mechanical predicates only; one global analytical retry is allowed.",)
+            for finding in self.memory.get_contradictions():
+                if finding.status != "resolved":
+                    rejected.append(AgentIssue(code="unresolved_contradiction",message=finding.finding_id+": "+finding.description))
+            for decision in self.memory.get_retry_decisions():
+                if decision.outcome=="unresolved":
+                    rejected.append(AgentIssue(code="unresolved_reanalysis",message=decision.decision_id+": "+decision.reason))
         return AnalysisMap(run_id=self.memory.run_id, execution_mode=execution_mode, issues=tuple(rejected),
-            extended=self.extended, health_gate=health_gate,
+            extended=self.extended, full=self.full, health_gate=health_gate,
+            contradictions=tuple(self.memory.get_contradictions()) if self.full else (),
+            retry_decisions=tuple(self.memory.get_retry_decisions()) if self.full else (),
             excluded_claim_refs=tuple(excluded), sections=tuple(
-            AnalysisSection(title=title, entries=items) for title, items in zip(titles, section_entries)), **options)
+            AnalysisSection(title=title, entries=membership[title]) for title in titles), **options)
 
     def validate_analysis_map(self, analysis_map: AnalysisMap) -> None:
-        titles = _EXTENDED_TITLES if self.extended else _TITLES
+        analysis_map = AnalysisMap.model_validate(analysis_map.model_dump(round_trip=True))
+        if self.extended or analysis_map.health_gate is not None:
+            original_issues = VerificationHealthGate(self.memory).validate_result(analysis_map.health_gate)
+            required = original_issues
+            if analysis_map.health_gate.decision == "blocked":
+                required += (AgentIssue(code="health_gate_blocked", message=analysis_map.health_gate.reason),)
+            if any(issue not in analysis_map.issues for issue in required):
+                raise ValueError("Analysis Map omitted authoritative upstream Health Gate issues")
+            expected_limits = _EXTENDED_LIMITATIONS if not self.full else _EXTENDED_LIMITATIONS[:-1] + (
+                "Bull/Bear are bounded model-selected interpretations; Critic covers explicit mechanical predicates only; one global analytical retry is allowed.",)
+            if self.extended and analysis_map.limitations != expected_limits:
+                raise ValueError("Analysis Map changed required extended limitations")
+        titles = _FULL_TITLES if self.full else _EXTENDED_TITLES if self.extended else _TITLES
+        if analysis_map.full != self.full:
+            raise ValueError("Analysis Map full mode changed")
+        if self.full:
+            if (analysis_map.contradictions != tuple(self.memory.get_contradictions())
+                    or analysis_map.retry_decisions != tuple(self.memory.get_retry_decisions())):
+                raise ValueError("Reasoning/retry metadata differs from current memory")
+            for finding in analysis_map.contradictions:
+                if finding.status != "resolved" and AgentIssue(code="unresolved_contradiction",message=finding.finding_id+": "+finding.description) not in analysis_map.issues:
+                    raise ValueError("Missing contradiction disclosure")
+            required_retries=Counter(AgentIssue(code="unresolved_reanalysis",message=d.decision_id+": "+d.reason)
+                for d in self.memory.get_retry_decisions() if d.outcome=="unresolved")
+            if Counter(i for i in analysis_map.issues if i.code=="unresolved_reanalysis")!=required_retries:
+                raise ValueError("Unresolved re-analysis disclosures differ from current memory")
         if (analysis_map.run_id != self.memory.run_id or analysis_map.extended != self.extended
                 or tuple(s.title for s in analysis_map.sections) != titles):
             raise ValueError("Analysis Map run or sections are invalid")
+        current_entries, exclusion_issues, excluded = self._collect_entries()
+        required_membership=self._section_membership(current_entries)
+        for section in analysis_map.sections:
+            if Counter(e.claim_ref for e in section.entries)!=Counter(e.claim_ref for e in required_membership[section.title]):
+                raise ValueError(f"Analysis Map section membership/provenance differs from current eligible memory: {section.title}")
+        if analysis_map.excluded_claim_refs != excluded:
+            raise ValueError("Analysis Map exclusions differ from current claim eligibility")
+        supplied_exclusions = Counter(i for i in analysis_map.issues if i.code == "report_claim_excluded")
+        if supplied_exclusions != Counter(exclusion_issues):
+            raise ValueError("Analysis Map exclusion disclosures differ from current claim eligibility")
+        expected_entries = {entry.claim_ref: entry for entry in current_entries}
         source_entries = next(s.entries for s in analysis_map.sections if s.title == "Sources")
         source_refs = {e.claim_ref for e in source_entries}
         for section in analysis_map.sections:
@@ -197,7 +291,7 @@ class ReportAgent:
                 if entry.claim_ref not in source_refs:
                     raise ValueError("Section claim has no Sources entry")
                 claim = self.memory.resolve(entry.claim_ref)
-                if self.memory.reference(claim.claim_id) != entry.claim_ref or self._entry(claim) != entry:
+                if self.memory.reference(claim.claim_id) != entry.claim_ref or expected_entries.get(entry.claim_ref) != entry:
                     raise ValueError("Analysis Map has stale or altered claim provenance")
                 if section.title == "Company Overview" and (claim.claim_type != "qualitative" or claim.agent != "DocumentAgent"):
                     raise ValueError("Company overview contains an unexpected claim type")
@@ -275,6 +369,25 @@ class ReportAgent:
                     if entry.dependency_refs:
                         lines.append("  Dependencies: " + "; ".join(
                             f"{_safe(r.claim_id)} v{r.version}" for r in entry.dependency_refs) + ".")
+        if self.full:
+            for title in ("Bull Case","Bear Case"):
+                lines.extend(["", "## "+title, ""])
+                if not by_title[title]:
+                    lines.append("No current constrained argument was admitted.")
+                for entry in by_title[title]:
+                    lines.append("- "+_safe(self.memory.resolve(entry.claim_ref).claim)+" "+citations(entry))
+            lines.extend(["", "## Key Contradictions", ""])
+            if not analysis_map.contradictions:
+                lines.append("None detected within implemented identity, dimension, citation and explicit-predicate checks; unrestricted language consistency is not established.")
+            for finding in analysis_map.contradictions:
+                refs = "; ".join(f"{r.claim_id} v{r.version}" for r in finding.claim_refs)
+                origin = "; ".join(f"{r.claim_id} v{r.version}" for r in finding.original_refs)
+                lines.append(f"- {_safe(finding.category)} / {_safe(finding.status)}: {_safe(finding.description)}; current {_safe(refs)}; origin {_safe(origin)}.")
+            for decision in analysis_map.retry_decisions:
+                lines.append(f"- Retry {_safe(decision.outcome)}: budget {decision.budget_before} to {decision.budget_after}; scope {_safe(decision.rerun_nodes)}; {_safe(decision.reason)}.")
+                for request in decision.requests:
+                    lines.append("  Routing metadata (not an admitted factual claim): "+_safe(request.trigger)+"; failures "+
+                        _safe(", ".join(request.failure_types))+"; correction/evidence requested: "+_safe("; ".join(request.correction))+".")
         lines.extend(["", "## Sources", ""])
         for evidence, label in source_ids.items():
             url = str(evidence.source_url).split("#")[0]
@@ -313,6 +426,7 @@ class ReportAgent:
 
     def generate_report(self, analysis_map: AnalysisMap | None = None) -> FinancialReport:
         analysis_map = analysis_map or self.build_analysis_map()
+        analysis_map = AnalysisMap.model_validate(analysis_map.model_dump(round_trip=True))
         self.validate_analysis_map(analysis_map)
         has_financial = any(s.title == "Financial Health" and s.entries for s in analysis_map.sections)
         blocked = analysis_map.health_gate is not None and analysis_map.health_gate.decision != "passed"
@@ -322,6 +436,7 @@ class ReportAgent:
         return report
 
     def validate_report(self, report: FinancialReport) -> None:
+        report = FinancialReport.model_validate(report.model_dump(round_trip=True))
         self.validate_analysis_map(report.analysis_map)
         has_financial = any(s.title == "Financial Health" and s.entries for s in report.analysis_map.sections)
         blocked = report.analysis_map.health_gate is not None and report.analysis_map.health_gate.decision != "passed"

@@ -198,8 +198,8 @@ def test_printed_page_is_not_guessed_from_pdf_offset(pages, result):
     page = pages[150]
     changed = replace(page, lines=tuple(line for line in page.lines if line.text != "50"))
     claims, failures = extract_statement(changed, INCOME, result.source)
-    assert not claims
-    assert [f.code for f in failures] == ["missing_page_label"]
+    assert len(claims)==4 and not failures
+    assert all(c.evidence[0].page==150 and c.evidence[0].printed_page is None for c in claims)
 
 
 @pytest.mark.parametrize("data", [b"not a PDF", b"%PDF-1.7\ntruncated"])

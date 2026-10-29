@@ -1,0 +1,123 @@
+{
+  "document": {
+    "case_id": "pepsico_2024",
+    "split": "test",
+    "source_url": "https://www.pepsico.com/docs/pepsico-5v9wci20/media/Files/investors/2024-pepsico-annual-report-01.pdf",
+    "annotation_status": "not yet independently annotated",
+    "test_contamination": false,
+    "attempts": [
+      {
+        "url": "https://www.pepsico.com/docs/default-source/annual-reports/2024-pepsico-annual-report.pdf",
+        "http_status": 404
+      },
+      {
+        "url": "https://www.pepsico.com/docs/pepsico-5v9wci20/media/Files/investors/2024-pepsico-annual-report-01.pdf",
+        "http_status": 200
+      }
+    ],
+    "status": "downloaded_candidate_not_gold",
+    "sha256": "2626c28e287a4137219963f0d1308f18223f5384467ee61da173678b5e1b4c6e",
+    "bytes": 3158326,
+    "title": "PepsiCo, Inc. FY2024 annual report",
+    "entity": "PepsiCo, Inc."
+  },
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "currency_context": {
+    "pdf_page": 34,
+    "quote": "Because our consolidated financial statements are presented in U.S. dollars"
+  },
+  "scale": 1000000,
+  "unit": "currency",
+  "current_start": null,
+  "prior_start": null,
+  "annual_header_dates": [
+    "2024-12-28",
+    "2023-12-30"
+  ],
+  "annotation_method": "AI source inspection of original PDF text/table headers using an independent read-only pdfplumber pass; Walmart rendered visually. No production extractor outputs or human review used.",
+  "annotation_status": "candidate source-inspected, not human-reviewed; ambiguity records remain authoritative",
+  "ambiguities": [
+    "Use consolidated net income 9626, not PepsiCo-attributable 9578."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "91854",
+      "period_end": "2024-12-28",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated income statement",
+      "row": "Net Revenue",
+      "column": "2024-12-28"
+    },
+    {
+      "metric": "revenue",
+      "value": "91471",
+      "period_end": "2023-12-30",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated income statement",
+      "row": "Net Revenue",
+      "column": "2023-12-30"
+    },
+    {
+      "metric": "operating_income",
+      "value": "12887",
+      "period_end": "2024-12-28",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated income statement",
+      "row": "Operating Profit",
+      "column": "2024-12-28"
+    },
+    {
+      "metric": "net_income",
+      "value": "9626",
+      "period_end": "2024-12-28",
+      "pdf_page": 73,
+      "printed_page": "61",
+      "table": "Consolidated income statement",
+      "row": "Net income",
+      "column": "2024-12-28"
+    },
+    {
+      "metric": "current_assets",
+      "value": "25826",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "65",
+      "table": "Consolidated balance sheet",
+      "row": "Total Current Assets",
+      "column": "2024-12-28"
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "31536",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "65",
+      "table": "Consolidated balance sheet",
+      "row": "Total Current Liabilities",
+      "column": "2024-12-28"
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "pepsico_2024-income",
+      "query": "Find the consolidated income statement revenue, income and fiscal column headers",
+      "relevant_pages": [
+        73
+      ],
+      "source_anchor": "Net Revenue"
+    },
+    {
+      "id": "pepsico_2024-balance",
+      "query": "Find total current assets and total current liabilities in the consolidated balance sheet",
+      "relevant_pages": [
+        77
+      ],
+      "source_anchor": "Total Current Assets"
+    }
+  ]
+}

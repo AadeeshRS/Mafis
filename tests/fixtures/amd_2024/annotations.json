@@ -1,0 +1,173 @@
+{
+  "document": {
+    "case_id": "amd_2024",
+    "split": "validation",
+    "role": "reserve for unavailable Microsoft source; original case/failures retained",
+    "parent_manifest_sha256": "02970b9733a4231fa7338badec38f7cc5155ab7038e1987986016855c5ee059c",
+    "source_url": "https://ir.amd.com/financial-information/sec-filings/content/0001193125-25-067185/0001193125-25-067185.pdf",
+    "http_status": 200,
+    "status": "source_inspected_validation_gold",
+    "sha256": "28f3911e60546f90e4d98496f2f111179179ee760602ac2d1e71a313c1334567",
+    "bytes": 2778205,
+    "title": "Advanced Micro Devices, Inc. FY2024 annual report",
+    "entity": "Advanced Micro Devices, Inc.",
+    "annotation_status": "AI source-inspected, human review pending",
+    "pdf_page_count": 128
+  },
+  "entity": "Advanced Micro Devices, Inc.",
+  "accounting_scope": "consolidated",
+  "currency": "USD",
+  "scale": 1000000,
+  "unit": "currency",
+  "currency_context": {
+    "pdf_page": 84,
+    "printed_page": "68",
+    "quote": "The functional currency of the Company\u2019s foreign subsidiaries is the U.S. dollar."
+  },
+  "fiscal_calendar_context": {
+    "pdf_page": 80,
+    "printed_page": "64",
+    "quote": "Fiscal years 2024 and 2023 each consisted of 52 weeks, while fiscal year 2022 consisted of 53 weeks."
+  },
+  "current_start": "2023-12-31",
+  "prior_start": "2023-01-01",
+  "annual_header_dates": [
+    "2024-12-28",
+    "2023-12-30",
+    "2022-12-31"
+  ],
+  "annotation_method": "AI source inspection of original rendered/text PDF statement pages 75/77 and notes 80/84, followed by independent raw pdfplumber line/geometry transcription. No production extracted values copied; no human review claimed. Validation case used for parser development.",
+  "ambiguities": [
+    "Statements contain dotted leaders and some omitted interword spaces. Exact PDF page and geometry authoritative; unknown printed footer may remain None in production.",
+    "Functional-currency policy explicitly states U.S. dollar; no inference from dollar signs.",
+    "Validation/parser-development exposure; not held-out evidence."
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "value": "25785",
+      "period_end": "2024-12-28",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Net revenue",
+      "column": "December 28, 2024",
+      "source_row_quote": "Netrevenue ............................................... $ 25,785 $ 22,680 $ 23,601",
+      "bbox": [
+        69.0,
+        167.66999999999996,
+        520.45,
+        177.66999999999996
+      ],
+      "fiscal_context": "Annual year-ended comparative columns; 52/53-week policy on PDF80"
+    },
+    {
+      "metric": "revenue",
+      "value": "22680",
+      "period_end": "2023-12-30",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Net revenue",
+      "column": "December 30, 2023",
+      "source_row_quote": "Netrevenue ............................................... $ 25,785 $ 22,680 $ 23,601",
+      "bbox": [
+        69.0,
+        167.66999999999996,
+        520.45,
+        177.66999999999996
+      ],
+      "fiscal_context": "Annual year-ended comparative columns; 52/53-week policy on PDF80"
+    },
+    {
+      "metric": "operating_income",
+      "value": "1900",
+      "period_end": "2024-12-28",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Operating income",
+      "column": "December 28, 2024",
+      "source_row_quote": "Operatingincome .......................................... 1,900 401 1,264",
+      "bbox": [
+        68.99999999999943,
+        303.67,
+        520.4499999999995,
+        313.67
+      ],
+      "fiscal_context": "Annual year-ended comparative columns; 52/53-week policy on PDF80"
+    },
+    {
+      "metric": "net_income",
+      "value": "1641",
+      "period_end": "2024-12-28",
+      "pdf_page": 75,
+      "printed_page": "59",
+      "table": "Consolidated Statements of Operations",
+      "row": "Net income",
+      "column": "December 28, 2024",
+      "source_row_quote": "Netincome ............................................... $ 1,641 $ 854 $ 1,320",
+      "bbox": [
+        68.99999999999926,
+        383.67,
+        520.4499999999992,
+        393.67
+      ],
+      "fiscal_context": "Annual year-ended comparative columns; 52/53-week policy on PDF80"
+    },
+    {
+      "metric": "current_assets",
+      "value": "19049",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "61",
+      "table": "Consolidated Balance Sheets",
+      "row": "Total current assets",
+      "column": "December 28, 2024",
+      "source_row_quote": "Total current assets ........................................... 19,049 16,768",
+      "bbox": [
+        108.99999999999972,
+        246.69999999999993,
+        517.9499999999997,
+        256.81999999999994
+      ],
+      "fiscal_context": "Annual year-ended comparative columns; 52/53-week policy on PDF80"
+    },
+    {
+      "metric": "current_liabilities",
+      "value": "7281",
+      "period_end": "2024-12-28",
+      "pdf_page": 77,
+      "printed_page": "61",
+      "table": "Consolidated Balance Sheets",
+      "row": "Total current liabilities",
+      "column": "December 28, 2024",
+      "source_row_quote": "Total current liabilities ........................................ 7,281 6,689",
+      "bbox": [
+        108.99999999999898,
+        449.7,
+        517.949999999999,
+        459.82
+      ],
+      "fiscal_context": "Annual year-ended comparative columns; 52/53-week policy on PDF80"
+    }
+  ],
+  "retrieval_labels": [
+    {
+      "id": "amd-income",
+      "query": "Find net revenue and operating income in consolidated statements of operations",
+      "relevant_pages": [
+        75
+      ],
+      "source_anchor": "Operatingincome"
+    },
+    {
+      "id": "amd-balance",
+      "query": "Find total current assets and liabilities",
+      "relevant_pages": [
+        77
+      ],
+      "source_anchor": "Total current assets"
+    }
+  ]
+}
