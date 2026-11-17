@@ -388,6 +388,9 @@ def import_ratings(path):
 
 
 def main():
+    from memory.live_feed import configure_memory_feed
+
+    configure_memory_feed()
     parser=argparse.ArgumentParser(); parser.add_argument("--output",default="output/batch2/evaluation"); parser.add_argument("--real-embeddings",action="store_true")
     parser.add_argument("--cases",default="tests/fixtures/phase1_cases.json")
     parser.add_argument("--split",choices=("development","validation","test","all"),default="development")

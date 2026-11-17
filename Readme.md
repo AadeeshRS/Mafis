@@ -28,11 +28,15 @@ environment needs `python -m pip install -r requirements-phase1.txt`.
 .\.venv\Scripts\python.exe -m dashboard.server
 ```
 
-Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/). Run the complete pytest
-suite, choose a focused suite, or start a workflow scenario. Reports, analysis maps,
-evidence, scenario checks, and terminal output are available from each run. The
+Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/) to start a workflow scenario.
+Reports, analysis maps, evidence, scenario checks, and terminal output are
+available from each run. The
 run output shows the submitted question and its source-backed answer or a reason
 the question could not be answered. The Markdown report includes the same answer.
+**Live workflow** highlights the stage currently executing. Select a stage to
+see what it does and its recorded time. **Shared Memory** updates as the workflow
+writes records. Open an entry to inspect its evidence and version details, or
+select a past run to review its feed.
 Each report is written to the local run folder. **Download report (.md)** saves a
 copy through the browser. The dashboard listens on loopback and stores run
 history and uploaded PDFs in
@@ -71,6 +75,7 @@ defaults to returning an empty answer for document questions.
 .\.venv\Scripts\python.exe -m scripts.test_lab sample --case apple_2024 --workflow extended
 .\.venv\Scripts\python.exe -m scripts.test_lab retrieval
 .\.venv\Scripts\python.exe -m scripts.test_lab evaluation
+.\.venv\Scripts\python.exe -m scripts.test_lab apple-benchmark
 .\.venv\Scripts\python.exe -m scripts.test_lab coverage
 .\.venv\Scripts\python.exe -m scripts.test_lab key
 ```
@@ -81,6 +86,23 @@ assertions affect the exit code. For a custom PDF, pass `--pdf`, `--source-url`,
 clean runs show the actual report status so you can judge the result against your
 question. `--real-embeddings` exercises MiniLM retrieval and can trigger its initial
 model download. The default sample run uses deterministic test embeddings.
+
+### Apple FY2024 benchmark
+
+Select **Model comparison → Run Apple benchmark** or run
+`python -m scripts.test_lab apple-benchmark`. This runs one real single-call
+DeepSeek-R1 baseline and one Full MAFIS analysis with the same installed model,
+question, Apple filing and dated market snapshot. MAFIS performs additional
+retrieval for its evidence checks. The command saves both reports and the
+comparison data in the output folder it prints.
+
+The primary score counts results with the correct value, fiscal period, unit
+and both source inputs. Value accuracy and input citation accuracy are also
+reported separately. The reference uses manually labeled filing values and
+independent arithmetic after model execution. For a narrative review, read the
+two reports without their arm labels and score evidence support, usefulness,
+coverage and clarity from 1 to 5. Consider wall time, tokens and calls separately
+from quality. This benchmark uses one development case and one paired run.
 
 ### Gemini key and free testing
 

@@ -2,59 +2,59 @@
 
 16 slides, 16:9. Poppins. Deep green (#013230), cream (#F3EBDD) and orange (#FF6A1F).
 
-Main source: `report things/MAFIS Project Report.docx`. Course rubric: `report things/Final Guidelines.docx.pdf`.
+Sources: current implementation, saved workflow runs and the offline evaluation records. Course rubric: `report things/Final Guidelines.docx.pdf`.
 
 ## 01. MAFIS
 
 **Layout:** Dark cover with title and two results.
 
-**Placement:** Project scope on the left, closeout findings on the right.
+**Placement:** Project scope on the left, Apple demo and retrieval findings on the right.
 
-**Exact visible text** (42 words):
+**Exact visible text** (46 words):
 
 ```text
 ARTIFICIAL INTELLIGENCE COURSE PROJECT
 MAFIS
 Multi-Agent Financial
 Intelligence System
-Trace annual filing answers back to the exact cells and calculations behind them.
-28
-correct calculations across seven admitted filings
+Cited filing answers with local DeepSeek-R1 and a deterministic financial engine.
+4/4
+fully supported results in the Apple demo vs 0/4 for single DeepSeek
 28/30
 labelled queries found the right PDF page in the top five
 01
 ```
 
-**Speaker notes:** MAFIS takes a question and a company filing and produces an analysis a reader can check back to the source. I'll show how we assign filing cells to calculations, what happens when a required cell is missing, and what our offline experiments actually measured. Seven companies yielded four correct calculations each in the closeout.
+**Speaker notes:** MAFIS takes a question and a company filing and gives the reader a cited answer. A disclosure question can return checked excerpts, while a financial analysis can trace its calculations to filing cells. I'll show how we assign those cells to calculations, what happens when a required cell is missing, and what we measured in the Apple FY2024 demonstration. Both workflows ran local DeepSeek-R1. Full MAFIS delivered four results with correct values and inputs, and the single-call baseline delivered zero. The saved runs use one development filing.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/results.md`
+**Sources:** `report things/MAFIS Project Report.docx` · `Readme.md` · `agents/question_answer.py` · `output/test_lab/dashboard/336dbc93d17f41c7843b48d93f49f153/benchmark.json` · `evaluation/results.md`
 
-## 02. The right row can contain the wrong answer
+## 02. The correct row can contain the wrong answer
 
 **Layout:** Problem and example above an objective band.
 
 **Placement:** Question, source ambiguity and supported outputs appear in two columns.
 
-**Exact visible text** (92 words):
+**Exact visible text** (90 words):
 
 ```text
 INTRODUCTION
-The right row can contain the wrong answer
+The correct row can contain the wrong answer
 Task
-Answer an annual financial question using the company filing and a dated market source.
+Answer questions about a filing. Full financial analysis also draws on dated market context.
 A concrete risk
 The NVIDIA revenue row contains FY2024, FY2023 and FY2022. The chosen cell must match the requested fiscal period.
-Four supported outputs
+Four financial calculations
 Annual revenue growth, operating margin, net margin and the current ratio.
 Design objective
-Bind the answer to eligible source cells. Publish a partial report when a required input is missing.
+Link each answer to filing evidence. Show which inputs or disclosures the source leaves unavailable.
 Can source checks, exact arithmetic and a targeted correction improve annual filing analysis?
 02
 ```
 
-**Speaker notes:** A filing row can contain several years. Finding the revenue row is only the first step. For the NVIDIA example, the system also needs to choose the right fiscal column and preserve the scale in millions. A balance-sheet number is a position on a date, while income describes activity over a period. We compare the checked workflow against a single model call on common source material.
+**Speaker notes:** A filing row can contain several years. Finding the revenue row is only the first step. For the NVIDIA example, the system also needs to choose the right fiscal column and preserve the scale in millions. A balance-sheet number is a position on a date, while income describes activity over a period. For a disclosure question, the answer is drawn from verified passages. We compare the full financial workflow against a single model call on common source material.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `graph.py` · `tests/fixtures/nvidia_2024/annual_report.pdf`
+**Sources:** `report things/MAFIS Project Report.docx` · `graph.py` · `agents/question_answer.py` · `tests/fixtures/nvidia_2024/annual_report.pdf`
 
 ## 03. How MAFIS relates to prior financial QA work
 
@@ -102,7 +102,7 @@ The course experiment uses its own single-call and unified-analyst baselines.
 
 **Placement:** Editable state tuple, transition chain and search comparison.
 
-**Exact visible text** (75 words):
+**Exact visible text** (76 words):
 
 ```text
 METHODOLOGY / STATE-SPACE SEARCH
@@ -115,18 +115,18 @@ Graph transitions
 Terminal state
 Question and document
 Fresh run store
-Plan, ingest, extract, verify,
-calculate, interpret and report
-Complete traceable analysis
-or partial report with issues
+Route the question, retrieve,
+verify and calculate if needed
+Cited answer and report
+Evidence gaps when applicable
 Where search happens
 LangGraph follows prescribed stages and checks branch conditions. SharedRetriever ranks evidence by cosine distance.
 04
 ```
 
-**Speaker notes:** This is the report's state-space abstraction of ExtendedState. We start with a question, its document descriptor and a fresh run store. Every transition changes the plan, evidence, verification status or retry budget. The report is our terminal state and it can be complete or partial. The stages and branch conditions are known. The system searches the evidence index by cosine distance, so BFS over alternative workflows would solve a different problem.
+**Speaker notes:** This is the report's state-space abstraction of ExtendedState. We start with a question, its document descriptor and a fresh run store. Every transition changes the plan, evidence, verification status or retry budget. The Test Lab routes a disclosure question to document lookup. The financial path plans requested facts and operations. Both routes end with a cited answer or a record of what evidence is missing. The system searches the evidence index by cosine distance, so BFS over alternative workflows would solve a different problem.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `graph.py` · `agents/planner.py::allocate_retry` · `rag/retriever.py::SharedRetriever`
+**Sources:** `report things/MAFIS Project Report.docx` · `graph.py` · `agents/planner.py::PlannerAgent` · `scripts/test_lab.py::sample_run` · `rag/retriever.py::SharedRetriever`
 
 ## 05. Versioned claims preserve the evidence chain
 
@@ -198,7 +198,7 @@ NVIDIA Corporation and Subsidiaries. Consolidated Statements of Income. In milli
 
 **Placement:** Editable source-to-selection workflow and paired interpretation of retrieval parameters.
 
-**Exact visible text** (100 words):
+**Exact visible text** (112 words):
 
 ```text
 IMPLEMENTATION / DOCUMENT PREPARATION
@@ -214,28 +214,28 @@ Narrative windows
 Page text 900 characters with 150 overlap. Section text 800 characters with 100 overlap.
 Structured table chunks
 Retain the exact statement row, fiscal header, units and source locator.
-Similarity search
-CPU embeddings from all-MiniLM-L6-v2. Cosine distance within document and task filters.
-Context passed to DocumentAgent
-Up to 3 hits per narrative query and 5 per metric-specific table query.
-The pretrained encoder and Gemini adapter run inference. The project uses no training or fine-tuning.
+Text embeddings
+all-MiniLM-L6-v2 runs on CPU. Chroma ranks by cosine distance within document and task filters.
+Retrieval limits
+Analysis uses up to 3 hits per narrative query and 5 per table query. Document Q&A selects up to 3 excerpts from 5 narrative hits.
+MiniLM and the generation models run inference. The project uses no training or fine-tuning.
 07
 ```
 
-**Speaker notes:** The parser reads born-digital annual filings. Narrative windows preserve page boundaries and table chunks retain headers, typed cells and evidence locations. The embedding model is all-MiniLM-L6-v2 through ONNX on the CPU. Chroma ranks by cosine distance after applying metadata filters. DocumentAgent asks for a schema-bound choice of cells and quotes and checks the choice against the index.
+**Speaker notes:** The parser reads born-digital annual filings. Narrative windows preserve page boundaries and table chunks retain headers, typed cells and evidence locations. The Apple benchmark uses all-MiniLM-L6-v2 text embeddings through ONNX on the CPU. DeepSeek-R1 handles generation and selection on this machine. Chroma ranks by cosine distance after applying metadata filters. Structured analysis uses a schema-bound choice of cells and quotes. In document lookup, the model chooses up to three excerpt IDs from the five retrieved narrative chunks. The code resolves the IDs to verbatim text and the verifier checks the citation.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `rag/ingest.py::prepare_document` · `rag/retriever.py::SharedRetriever` · `agents/document_agent.py::collect_context`
+**Sources:** `report things/MAFIS Project Report.docx` · `config.py::EMBEDDING_MODEL` · `rag/ingest.py::prepare_document` · `rag/retriever.py::SharedRetriever` · `agents/document_agent.py::collect_context`
 
 ## 08. Verification determines the next stage
 
 **Layout:** Two-row workflow recreated from report Figure 1.
 
-**Placement:** Upper row shows the evidence path. Lower row shows the Pass and Blocked branches and the shared retry.
+**Placement:** The main diagram shows full financial analysis. A separate strip summarizes document Q&A.
 
-**Exact visible text** (72 words):
+**Exact visible text** (76 words):
 
 ```text
-IMPLEMENTATION / FULL WORKFLOW
+IMPLEMENTATION / WORKFLOW
 Verification determines the next stage
 Planner
 Set scope
@@ -258,13 +258,13 @@ Rerun affected stages
 Analysis map + report
 Findings and gaps
 No retry needed or available
-A planning or ingestion failure routes directly to the gate.
+Document Q&A   Retrieve passages → select excerpts → verify wording and pages → cited answer.
 08
 ```
 
-**Speaker notes:** Planner decides scope, then we prepare the filing and select and verify its primitives. Financial and dated Market findings feed Risk, which is also verified. The gate checks the current evidence. If it passes, Bull and Bear use the same checked claims and Critic tests their structured assertions. A blocked gate routes straight to Planner. A retry reruns affected dependencies, and the final report lists any unresolved issues.
+**Speaker notes:** Planner decides scope, then we prepare the filing and select and verify its primitives. Financial and dated Market findings feed Risk, which is also verified. The gate checks the current evidence. If it passes, Bull and Bear use the same checked claims and Critic tests their structured assertions. A blocked gate routes straight to Planner. A retry reruns affected dependencies. Early planning or ingestion failures route to the gate. In document Q&A, the verifier checks the selected quotations before the report and answer use them. Test Lab shows the answer and offers the Markdown report for download. Its Shared Memory feed displays committed claims, calculation artifacts and stage events as the run proceeds.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `graph.py` · `agents/full_workflow.py` · `agents/report_agent.py`
+**Sources:** `report things/MAFIS Project Report.docx` · `graph.py` · `agents/full_workflow.py` · `agents/report_agent.py` · `agents/question_answer.py` · `dashboard/server.py` · `memory/live_feed.py`
 
 ## 09. Models propose. Rules decide eligibility.
 
@@ -272,7 +272,7 @@ A planning or ingestion failure routes directly to the gate.
 
 **Placement:** Left presents model roles. Right presents arithmetic, screening and routing checks.
 
-**Exact visible text** (98 words):
+**Exact visible text** (103 words):
 
 ```text
 IMPLEMENTATION / AGENTS AND SETTINGS
@@ -280,18 +280,18 @@ Models propose. Rules decide eligibility.
 Model calls
 Document and Financial agents propose source cells and operations. Bull and Bear propose interpretations from one checked snapshot.
 Deterministic checks
-VerificationAgent checks evidence and can replay calculations. Critic tests conflicts between typed claims.
-Adapter defaults
-gemini-3.8-flash, temperature 0, 4,096 output tokens, 30 s timeout and 2 transport retries.
-Engine and screening
-50-digit Decimal arithmetic, four displayed decimals. Market and Risk apply rules and qualify risk as a hypothesis.
+Verification can replay 50-digit Decimal calculations. The Critic applies conflict rules to typed claims.
+Local Ollama · deepseek-r1:8b
+4,096-token context and 8 KiB JSON request limit. Compact IDs resolve to exact filing references.
+Demo settings for both arms
+Temperature 0, thinking disabled, 1,024 output tokens per request. Gemini is an opt-in cloud path.
 Health Gate blocks above 0.5 ineligible, on empty evidence or on explicit upstream issues. One analytical retry.
 09
 ```
 
-**Speaker notes:** DocumentAgent selects filing cells. FinancialAgent selects allowed operations. The Bull and Bear agents use the same verified snapshot, and an optional Critic model call describes findings already detected by rules. The arithmetic runs in a 50-digit Decimal context, with half-up rounding only for the four-decimal display. Market screens dated sources, Risk labels hypotheses, and the gate blocks on evidence failures. The 0.5 default remained unchanged after an injected validation-only sweep from 0 to 1 in steps of 0.25.
+**Speaker notes:** DocumentAgent selects filing cells. FinancialAgent selects allowed operations. The Bull and Bear agents use the same verified snapshot, and an optional Critic model call describes findings already detected by rules. The arithmetic runs in a 50-digit Decimal context, with half-up rounding for the four-decimal display. Market screens dated sources and Risk labels hypotheses. Ollama runs DeepSeek-R1 on the same machine. It uses compact evidence IDs for structured selection and restores full references before agent checks. The Apple comparison used temperature 0, thinking disabled and a 1,024-token output cap for both arms. The injected validation sweep from 0 to 1 in steps of 0.25 leaves the 0.5 engineering default in place.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `config.py` · `gemini.py::GeminiSettings` · `agents/verification_gate.py` · `agents/critic_agent.py` · `engine/financial_engine.py` · `evaluation/batch2.py::freeze_threshold`
+**Sources:** `report things/MAFIS Project Report.docx` · `config.py` · `gemini.py::GeminiSettings` · `ollama_adapter.py::OllamaAdapter` · `agents/verification_gate.py` · `agents/critic_agent.py` · `engine/financial_engine.py` · `evaluation/batch2.py::freeze_threshold`
 
 ## 10. Seven filings produced all four calculations
 
@@ -299,10 +299,10 @@ Health Gate blocks above 0.5 ineligible, on empty evidence or on explicit upstre
 
 **Placement:** Editable reproduction of report Table 3, with fiscal-year percentages and unitless current ratios.
 
-**Exact visible text** (82 words):
+**Exact visible text** (83 words):
 
 ```text
-RESULTS / SOURCE COVERAGE
+OFFLINE CLOSEOUT / SOURCE COVERAGE
 Seven filings produced all four calculations
 13
 FY2024 source slots
@@ -393,7 +393,7 @@ Missing reference values
 
 **Placement:** The report’s admission examples and counts from the verification and contradiction tests.
 
-**Exact visible text** (75 words):
+**Exact visible text** (79 words):
 
 ```text
 RESULTS / FAILURE ANALYSIS
@@ -423,13 +423,13 @@ Contradictions
 0
 0
 Precision and recall 1.0 on these small injected sets.
-Repo closeout  ·  575 passing automated tests. Source failures stay in the requested-slot denominator.
+Apple FY2024, PDF p. 10  ·  The cited passage describes a minority smartphone share and gives no percentage.
 12
 ```
 
-**Speaker notes:** Intel lacked admissible currency evidence. Walmart's statement fonts lacked a usable Unicode mapping in this parser. Nike failed currency admission and lacked a separately reported operating-income row. Microsoft, Alphabet and Netflix were unavailable. The verifier and Critic were also tested on small injected cases. The counts show which cases those rules caught. Those tests are separate from live comparisons.
+**Speaker notes:** Intel lacked admissible currency evidence. Walmart's statement fonts lacked a usable Unicode mapping in this parser. Nike failed currency admission and lacked a separately reported operating-income row. Microsoft, Alphabet and Netflix were unavailable. The verifier and Critic were also tested on small injected cases. The Apple document run shows a different kind of evidence gap. It verified a passage describing market share qualitatively, and flagged the missing percentage. Verification checks wording and source location, while coverage depends on whether the passage answers the question.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/results.md` · `evaluation/mechanisms.py` · `tests/fixtures/batch2_cases.json`
+**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/results.md` · `evaluation/mechanisms.py` · `tests/fixtures/batch2_cases.json` · `output/test_lab/dynamic-apple-final/run_summary.json`
 
 ## 13. One retry restores NVIDIA’s net margin
 
@@ -465,50 +465,50 @@ STEP 05 / 05 / 48.8493% net margin / Gate passes · report succeeds / Omission G
 
 **Sources:** `report things/MAFIS Project Report.docx` · `output/test_lab/verify-corrected/scenario.json` · `output/test_lab/verify-corrected/evidence.json` · `output/batch2/demo/results.json` · `scripts/test_lab.py`
 
-## 14. Three workflows share the same mock score
+## 14. Apple FY2024 demo benchmark
 
-**Layout:** Baseline table followed by descriptions of the three paths.
+**Layout:** Editable four-metric result table above the score and run counts.
 
-**Placement:** Side-by-side counts for full MAFIS, single LLM and unified analyst, with each architecture’s role.
+**Placement:** Oracle values next to the outputs of single-call DeepSeek-R1 and Full MAFIS.
 
-**Exact visible text** (88 words):
+**Exact visible text** (87 words):
 
 ```text
-RESULTS / BASELINE COMPARISON
-Three workflows share the same mock score
-Condition
-Completed
-Correct / requested
-Mock calls
-Mean local s
+RESULTS / PAIRED LOCAL INFERENCE
+Apple FY2024 demo benchmark
+Same local DeepSeek-R1, Apple filing and dated market evidence
+Metric
+Independent reference
+Single DeepSeek-R1
 Full MAFIS
-7
-28/52
-56
-24.147
-Single LLM
-7
-28/52
-7
-0.007
-Unified analyst
-7
-28/52
-21
-13.577
-Full MAFIS
-Specialist calls, scoped retrieval, verified arithmetic and bounded correction.
-Single LLM
-One call. The model handles the report and arithmetic.
-Unified analyst
-One combined selection and planning call, with engine access.
-All three start with common source material. The full workflow can retrieve additional scoped evidence.
+Revenue growth
+2.0220%
+4.37%
+2.0220%
+Operating margin
+31.5102%
+31.55%
+31.5102%
+Net margin
+23.9713%
+24.00%
+23.9713%
+Current ratio
+0.8673×
+0.87×
+0.8673×
+Fully supported
+Value, unit, period + inputs
+0/4
+4/4
+Input citations 4/4 in both arms   ·   Requests 1 vs 8   ·   Observed wall time 37.2 s vs 18.1 s
+One development filing. Wall time excludes shared indexing. Narrative quality was unscored.
 14
 ```
 
-**Speaker notes:** The full and single-call workflows begin with the same question, adapter settings, source evidence bundle and dated market pool. The full workflow can also retrieve scoped evidence as needed. The unified analyst combines selection and planning and keeps the engine. All three get 28 correct results across 52 requested slots with scripted model responses. The live comparator returned HTTP 503, leaving zero live pairs.
+**Speaker notes:** Both arms ran deepseek-r1:8b in Ollama with the same Apple question, filing, model settings and dated market source. The single model calculated the metrics. Full MAFIS used its deterministic engine and additional verification retrieval. A score requires the right value, fiscal period, unit and both input citations. Both arms cited the correct inputs for four of four metrics. The baseline reports two decimal places, and all four values miss the numerical tolerance. Narrative quality was unscored. Shared indexing was excluded from wall time, and run order, caches and warm-up can affect it. The table uses the more recent saved run. An earlier run on the same development case reproduced the scores. The Test Lab command is python -m scripts.test_lab apple-benchmark.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/results.md` · `evaluation/batch2.py::CommonEvidence`
+**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/apple_benchmark.py::run_apple_benchmark` · `output/test_lab/dashboard/336dbc93d17f41c7843b48d93f49f153/benchmark.json` · `output/test_lab/dashboard/7ce217b5d5674cf19471b57140aace5e/benchmark.json` · `tests/fixtures/apple_2024/annotations.json`
 
 ## 15. What changes when components are removed
 
@@ -516,7 +516,7 @@ All three start with common source material. The full workflow can retrieve addi
 
 **Placement:** Editable timing and call-count table, plus changes to the path each condition can exercise.
 
-**Exact visible text** (91 words):
+**Exact visible text** (97 words):
 
 ```text
 RESULTS / ABLATIONS AND TRADE-OFFS
@@ -545,36 +545,37 @@ Financial Engine
 Model arithmetic without artifacts
 28
 2.261
-Each condition had 28 correct outputs across 52 requested slots. Across all eight, 56 runs completed and 48 failed preparation.
-Local runs include retrieval under concurrent load. Peak memory and live latency remain unmeasured.
+Mock evaluation  ·  28/52 correct per condition, 56 completions and 48 preparation failures.
+Apple local example  ·  Context shrank from 85,178 to 3,828 bytes across 8 requests.
+Mock timings include retrieval under load. Controlled latency and peak memory remain unmeasured.
 15
 ```
 
-**Speaker notes:** Every condition completed on seven admitted filings and retained six preparation failures. Over eight conditions that gives 56 completions and 48 failures. Removing verification changes which claims can support the report. Removing the engine changes who does the arithmetic. The timings include retrieval under concurrent validation load. Peak memory and live provider latency remain unmeasured.
+**Speaker notes:** This table is from the separate mock evaluation. Every condition completed on seven admitted filings and retained six preparation failures. Over eight conditions that gives 56 completions and 48 failures. Removing verification changes which claims can support the report. Removing the engine changes who does the arithmetic. The timings include retrieval under concurrent validation load. In one saved Apple full run on Ollama, context compaction reduced the cumulative context from 85,178 to 3,828 bytes across eight model requests. The context counts exclude the rest of the request body. This is a run example. Controlled latency and peak memory remain unmeasured.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/results.md` · `evaluation/batch2.py::CONDITIONS` · `evaluation/experimental.py`
+**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/results.md` · `evaluation/batch2.py::CONDITIONS` · `evaluation/experimental.py` · `output/test_lab/ollama-full-verify/scenario.json`
 
-## 16. The next test needs live pairs on unseen filings
+## 16. Paired evaluation on unseen filings
 
 **Layout:** Three limitation-and-action rows above an ethics band.
 
 **Placement:** Each gap from the report is paired with the next measurement.
 
-**Exact visible text** (78 words):
+**Exact visible text** (71 words):
 
 ```text
 DISCUSSION / LIMITS AND NEXT STEPS
-The next test needs live pairs on unseen filings
-Zero completed live pairs
-Run matched full and single-call trials on unseen filings. Measure latency and peak memory.
+Paired evaluation on unseen filings
+One development filing
+Repeat matched local trials on unseen filings. Measure latency variance and peak memory.
 Zero imported reviewer ratings
 Grade numerical answers and source support independently against the filings.
 Parser admission varies by filing
 Test new layouts and retain preparation failures in coverage by format.
-Disclose missing evidence, label risk as a hypothesis and keep live model execution opt-in.
+Expose evidence gaps, label risk as a hypothesis and keep cloud execution opt-in.
 16
 ```
 
-**Speaker notes:** The live comparator returned HTTP 503 after 3.890 seconds and produced no completed live pairs. No human ratings have been imported. To test reliability, we'd run matched pairs on unseen filings, have independent reviewers trace the claims, and measure timing and peak memory under controlled conditions. We also need to record failures by filing format and keep missing evidence visible. In live mode, the question and retrieved excerpts are sent to the model service.
+**Speaker notes:** The Apple runs exercised both arms on one known development filing. The next evaluation needs matched local runs on unseen filings and repetitions to measure runtime variability. No human ratings have been imported. To test reliability, we'd run those pairs, have independent reviewers trace the claims, and measure timing and peak memory under controlled conditions. We also need to record failures by filing format and keep missing evidence visible. In live mode, the question and retrieved excerpts are sent to the model service. Ollama sends its requests to the local service.
 
-**Sources:** `report things/MAFIS Project Report.docx` · `evaluation/results.md` · `evaluation/batch2.py::import_ratings` · `tests/fixtures/batch2_cases.json`
+**Sources:** `report things/MAFIS Project Report.docx` · `output/test_lab/dashboard/336dbc93d17f41c7843b48d93f49f153/benchmark.json` · `evaluation/results.md` · `evaluation/batch2.py::import_ratings` · `tests/fixtures/batch2_cases.json` · `ollama_adapter.py`

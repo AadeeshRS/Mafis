@@ -1,0 +1,131 @@
+{
+  "case_id": "apple_2024",
+  "question": "Assess FY2024 financial health, revenue growth, profitability and liquidity",
+  "model": "deepseek-r1:8b",
+  "settings": {
+    "temperature": 0,
+    "thinking": false,
+    "context_tokens": 4096,
+    "output_tokens_per_request": 1024
+  },
+  "filing_sha256": "319e1217afe72f194575e63350ea6c813eaf5caf0c24e59ce8b221fc1b3ea0d4",
+  "common_context_sha256": "2a56cb68441935075fc77a7a3f6e74e91a65177a6021841a9d95ef68592d6e9c",
+  "shared_preparation_seconds": 29.77660819999801,
+  "complete": true,
+  "source": "output/test_lab/dashboard/336dbc93d17f41c7843b48d93f49f153/benchmark.json",
+  "repeat_source": "output/test_lab/dashboard/7ce217b5d5674cf19471b57140aace5e/benchmark.json",
+  "arms": {
+    "baseline": {
+      "status": "success",
+      "rows": [
+        {
+          "operation": "revenue_growth",
+          "expected": "2.0220",
+          "unit": "percent",
+          "observed": "4.37",
+          "observed_unit": "percent",
+          "observed_period_end": "2024-09-28",
+          "correct": false,
+          "citations_correct": true,
+          "fully_supported": false
+        },
+        {
+          "operation": "operating_margin",
+          "expected": "31.5102",
+          "unit": "percent",
+          "observed": "31.55",
+          "observed_unit": "percent",
+          "observed_period_end": "2024-09-28",
+          "correct": false,
+          "citations_correct": true,
+          "fully_supported": false
+        },
+        {
+          "operation": "net_margin",
+          "expected": "23.9713",
+          "unit": "percent",
+          "observed": "24.00",
+          "observed_unit": "percent",
+          "observed_period_end": "2024-09-28",
+          "correct": false,
+          "citations_correct": true,
+          "fully_supported": false
+        },
+        {
+          "operation": "current_ratio",
+          "expected": "0.8673",
+          "unit": "ratio",
+          "observed": "0.87",
+          "observed_unit": "ratio",
+          "observed_period_end": "2024-09-28",
+          "correct": false,
+          "citations_correct": true,
+          "fully_supported": false
+        }
+      ],
+      "correct": 0,
+      "citations_correct": 4,
+      "fully_supported": 0,
+      "calls": 1,
+      "prompt_tokens": 584,
+      "output_tokens": 634,
+      "seconds": 37.19
+    },
+    "mafis": {
+      "status": "success",
+      "rows": [
+        {
+          "operation": "revenue_growth",
+          "expected": "2.0220",
+          "unit": "percent",
+          "observed": "2.0220",
+          "observed_unit": "percent",
+          "observed_period_end": "2024-09-28",
+          "correct": true,
+          "citations_correct": true,
+          "fully_supported": true
+        },
+        {
+          "operation": "operating_margin",
+          "expected": "31.5102",
+          "unit": "percent",
+          "observed": "31.5102",
+          "observed_unit": "percent",
+          "observed_period_end": "2024-09-28",
+          "correct": true,
+          "citations_correct": true,
+          "fully_supported": true
+        },
+        {
+          "operation": "net_margin",
+          "expected": "23.9713",
+          "unit": "percent",
+          "observed": "23.9713",
+          "observed_unit": "percent",
+          "observed_period_end": "2024-09-28",
+          "correct": true,
+          "citations_correct": true,
+          "fully_supported": true
+        },
+        {
+          "operation": "current_ratio",
+          "expected": "0.8673",
+          "unit": "ratio",
+          "observed": "0.8673",
+          "observed_unit": "ratio",
+          "observed_period_end": "2024-09-28",
+          "correct": true,
+          "citations_correct": true,
+          "fully_supported": true
+        }
+      ],
+      "correct": 4,
+      "citations_correct": 4,
+      "fully_supported": 4,
+      "calls": 8,
+      "prompt_tokens": 2690,
+      "output_tokens": 157,
+      "seconds": 18.063
+    }
+  }
+}

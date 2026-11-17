@@ -34,7 +34,8 @@ SUITES = {
     "workflow": ("Workflow & reasoning", "Routing, all three workflows, Bull/Bear, Critic and targeted corrections.",
                  ("planner", "pipeline", "batch1_integration", "batch2_full", "batch2_reasoning", "closeout_regressions", "test_lab")),
     "provider": ("Provider & evaluation", "Mock SDK failures, retry budgets, baselines and evaluation metrics.",
-                 ("gemini", "ollama_adapter", "provider_reliability", "evaluation", "evaluation_cli_budget", "batch2_evaluation")),
+                 ("gemini", "ollama_adapter", "provider_reliability", "evaluation", "evaluation_cli_budget", "batch2_evaluation",
+                  "apple_benchmark")),
 }
 
 
@@ -238,6 +239,7 @@ def main():
     commands.add_parser("ollama", help="Check the local Ollama service and installed DeepSeek-R1 model")
     commands.add_parser("retrieval", help="Measure MiniLM retrieval against labeled annual report pages")
     commands.add_parser("evaluation", help="Run the offline full workflow and comparator on development cases")
+    commands.add_parser("apple-benchmark", help="Compare single-call DeepSeek-R1 with Full MAFIS on Apple FY2024")
     commands.add_parser("coverage", help="Record PDF source, extraction and calculation coverage")
     for command in commands.choices.values():
         command.add_argument("--output", type=Path, default=OUTPUT / f"terminal-{uuid4().hex[:12]}")
@@ -247,6 +249,10 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     print(f"Output directory: {output}", flush=True)
     try:
+        if args.command in ("sample", "apple-benchmark"):
+            from memory.live_feed import configure_memory_feed
+
+            configure_memory_feed()
         if args.command == "suite":
             return run_suite(args.group, output)
         if args.command == "sample":
@@ -255,6 +261,12 @@ def main():
             return check_key(output)
         if args.command == "ollama":
             return check_ollama(output)
+        if args.command == "apple-benchmark":
+            if check_ollama(output):
+                return 1
+            from evaluation.apple_benchmark import run_apple_benchmark
+
+            return run_apple_benchmark(output, samples()["apple_2024"], FIXTURES / "market_snapshots/fomc_2024_01_31.json")
         commands_to_run = {
             "retrieval": ["scripts.evaluate_retrieval", "--output", str(output / "retrieval.json"),
                           "--index", str(output / "index")],

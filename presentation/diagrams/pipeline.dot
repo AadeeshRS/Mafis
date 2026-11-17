@@ -6,6 +6,7 @@ digraph MAFIS {
   edge [color="#465C54", fontname="Arial", fontcolor="#465C54", arrowsize=.7];
 
   input [label="Question + filing", fillcolor="#FFF9EE"];
+  route [label="Test Lab selects a workflow"];
   planner [label="PlannerAgent"];
   ingest [label="Ingest and index filing"];
   doc [label="DocumentAgent"];
@@ -22,7 +23,17 @@ digraph MAFIS {
   rerun [label="Rerun affected dependencies\nand refresh checks"];
   report [label="AnalysisMap + ReportAgent", fillcolor="#013230", fontcolor="#FFF9EE"];
 
-  input -> planner -> ingest -> doc -> primitive -> financial -> market -> findings;
+  lookup [label="Document lookup plan"];
+  lookup_ingest [label="Ingest and index filing"];
+  passages [label="Retrieve five narrative chunks\nSelect up to three excerpts"];
+  cite [label="Verify wording and PDF page", fillcolor="#DEE7D9", color="#19574D"];
+  answer [label="Cited answer + document report", fillcolor="#013230", fontcolor="#FFF9EE"];
+
+  input -> route;
+  route -> lookup [label="Document Q&A"];
+  lookup -> lookup_ingest -> passages -> cite -> answer;
+  route -> planner [label="Full financial analysis"];
+  planner -> ingest -> doc -> primitive -> financial -> market -> findings;
   planner -> gate [label="Plan blocked"];
   ingest -> gate [label="No source ID"];
   primitive -> market [label="No operation requested"];

@@ -15,6 +15,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
+from memory.live_feed import publish_memory_entries
+
 AgentName = Literal[
     "DocumentAgent",
     "FinancialAgent",
@@ -518,6 +520,7 @@ class SharedMemory:
         if accepted.annual_period_evidence is not None:
             self._check_evidence(accepted.annual_period_evidence, accepted)
         self._sources[accepted.source_id] = accepted.model_dump_json(round_trip=True)
+        publish_memory_entries(self.run_id, ("source", accepted))
         return self.get_source(accepted.source_id)
 
     def get_source(self, source_id: str) -> SourceDocument:
@@ -608,6 +611,8 @@ class SharedMemory:
         # No state changes occur until all validation and serialization succeeds.
         self._claims[claim_id] = history + (snapshot,)
         self._support_refs[(claim_id, accepted.version)] = tuple(support_refs)
+        if not verification_revision:
+            publish_memory_entries(self.run_id, ("claim", detached))
         return detached
 
     def append_verification(self, record: VerificationRecord) -> VerificationRecord:
@@ -630,8 +635,9 @@ class SharedMemory:
             "verification_status": accepted.outcome, "support_level": accepted.support_level,
             "timestamp": accepted.timestamp})
         snapshot = accepted.model_dump_json(round_trip=True)
-        self._append(updated, verification_revision=True)
+        revision = self._append(updated, verification_revision=True)
         self._verifications += (snapshot,)
+        publish_memory_entries(self.run_id, ("claim", revision), ("verification", accepted))
         return VerificationRecord.model_validate_json(snapshot)
 
     def get_verification_records(self, claim_id: str | None = None) -> list[VerificationRecord]:
@@ -682,10 +688,12 @@ class SharedMemory:
 
     def _record_health_gate(self, result, issues) -> None:
         """Retain detached gate policy and upstream issues within this run only."""
-        self._health_gate_contexts += (json.dumps({
+        context = {
             "result": result.model_dump(mode="json"),
             "issues": [issue.model_dump(mode="json") for issue in issues],
-        }, allow_nan=False),)
+        }
+        self._health_gate_contexts += (json.dumps(context, allow_nan=False),)
+        publish_memory_entries(self.run_id, ("health_gate", context))
 
     def get_health_gate_context(self) -> dict[str, Any] | None:
         """Detached latest authoritative gate evaluation, never caller map data."""
@@ -709,6 +717,7 @@ class SharedMemory:
             self.resolve(ref)
         self._retry_remaining = expected
         self._retry_decisions += (accepted.model_dump_json(),)
+        publish_memory_entries(self.run_id, ("retry", accepted))
         return RetryDecision.model_validate_json(self._retry_decisions[-1])
 
     def get_retry_decisions(self) -> list[RetryDecision]:
@@ -727,6 +736,7 @@ class SharedMemory:
                     or accepted.run_iteration < previous.run_iteration):
                 raise ValueError("Finding revision cannot erase its origin or rule")
         self._contradictions[accepted.finding_id] = history + (accepted.model_dump_json(),)
+        publish_memory_entries(self.run_id, ("contradiction", accepted))
         return ContradictionRecord.model_validate_json(self._contradictions[accepted.finding_id][-1])
 
     def get_contradictions(self, *, history: bool = False) -> list[ContradictionRecord]:
@@ -793,6 +803,7 @@ class SharedMemory:
         snapshot = accepted.model_dump_json(round_trip=True)
         detached = CalculationArtifact.model_validate_json(snapshot)
         self._calculations[accepted.calculation_ref] = snapshot
+        publish_memory_entries(self.run_id, ("calculation", detached))
         return detached
 
     def get_calculation(self, calculation_ref: str) -> CalculationArtifact:

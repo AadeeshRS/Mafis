@@ -23,6 +23,7 @@ from agents.verification_gate import GateResult
 from agents.planner import Phase1Plan, PlannerAgent
 from agents.report_agent import AnalysisMap, FinancialReport, ReportAgent
 from gemini import GeminiAdapter, GeminiSettings
+from memory.live_feed import track_stage
 from memory.shared_memory import EvidenceModel, SharedMemory, VerificationRecord
 from rag.ingest import ingest_document
 from rag.retriever import RetrievalUnavailable, get_shared_retriever
@@ -60,6 +61,31 @@ class ExtendedState(Phase1State, total=False):
     critic_result: Any
     retry_decision: Any
     retry_execution: Any
+
+
+_NODE_STAGES = {
+    "planner": "planner", "ingest": "ingest", "document_agent": "document",
+    "verify_document": "verification", "verify_primitives": "verification",
+    "verify_findings": "verification", "verify_risk": "verification",
+    "financial_agent": "financial", "market_agent": "market", "risk_agent": "risk",
+    "health_gate": "health_gate", "report": "report", "final_report": "report",
+    "planner_retry": "retry_check", "targeted_retry": "retry",
+}
+
+
+def timed_node(name, function, *, intermediate_report=False):
+    stage = None if intermediate_report else _NODE_STAGES.get(name)
+
+    def invoke(state):
+        start = perf_counter()
+        memory = state.get("memory")
+        with track_stage(stage, memory.run_id if memory else ""):
+            update = function(state)
+        update["stage_timings_ms"] = {**update.get("stage_timings_ms", state.get("stage_timings_ms", {})),
+                                      name: (perf_counter() - start) * 1000}
+        return update
+
+    return invoke
 
 
 def build_graph(*, retriever=None, document_llm=None, financial_llm=None, document_lookup=False):
@@ -131,23 +157,15 @@ def build_graph(*, retriever=None, document_llm=None, financial_llm=None, docume
     def report(state):
         return {"report": ReportAgent(state["memory"], retriever, document_lookup=document_lookup).generate_report(state["analysis_map"])}
 
-    def timed(name, function):
-        def invoke(state):
-            start = perf_counter()
-            update = function(state)
-            update["stage_timings_ms"] = {**state.get("stage_timings_ms", {}), name: (perf_counter() - start) * 1000}
-            return update
-        return invoke
-
     builder = StateGraph(Phase1State)
     for name, function in (("planner", planner), ("ingest", ingest), ("document_agent", document),
                            ("financial_agent", financial), ("analysis_map", analysis_map), ("report", report)):
-        builder.add_node(name, timed(name, function))
+        builder.add_node(name, timed_node(name, function))
     builder.add_edge(START, "planner")
     builder.add_conditional_edges("planner", lambda s: "ingest" if s["plan"].status == "ready" else "analysis_map")
     builder.add_conditional_edges("ingest", lambda s: "document_agent" if s.get("source_id") else "analysis_map")
     if document_lookup:
-        builder.add_node("verify_document", timed("verify_document", verify_document))
+        builder.add_node("verify_document", timed_node("verify_document", verify_document))
         builder.add_edge("document_agent", "verify_document")
         builder.add_edge("verify_document", "analysis_map")
     else:
@@ -302,21 +320,13 @@ def build_extended_graph(*, retriever=None, document_llm=None, financial_llm=Non
     def report(state):
         return {"report": ReportAgent(state["memory"], retriever, extended=True).generate_report(state["analysis_map"])}
 
-    def timed(name, function):
-        def invoke(state):
-            start = perf_counter()
-            update = function(state)
-            update["stage_timings_ms"] = {**state.get("stage_timings_ms", {}), name: (perf_counter() - start) * 1000}
-            return update
-        return invoke
-
     builder = StateGraph(ExtendedState)
     nodes = (("planner", planner), ("ingest", ingest), ("document_agent", document),
         ("verify_primitives", verify_primitives), ("financial_agent", financial), ("market_agent", market),
         ("verify_findings", verify_findings), ("risk_agent", risk), ("verify_risk", verify_risk),
         ("health_gate", gate), ("gate_blocked", blocked), ("analysis_map", analysis_map), ("report", report))
     for name, function in nodes:
-        builder.add_node(name, timed(name, function))
+        builder.add_node(name, timed_node(name, function, intermediate_report=_full and name == "report"))
     builder.add_edge(START, "planner")
     builder.add_conditional_edges("planner", lambda s: "ingest" if s["plan"].status == "ready" else "health_gate",
                                   {"ingest": "ingest", "health_gate": "health_gate"})
@@ -505,7 +515,8 @@ def build_full_graph(*, retriever=None, document_llm=None, financial_llm=None, b
         market_filters=market_filters,risk_categories=risk_categories,as_of=as_of,health_threshold=health_threshold,_full=True,_prepared=prepared_document)
     def refresh(s):
         factual_issues = tuple(i for i in s["issues"] if not i.code.startswith(("bull_","bear_","critic_","health_gate_blocked")))
-        s["health_gate"] = VerificationHealthGate(s["memory"],health_threshold).evaluate(issues=factual_issues)
+        with track_stage("health_gate", s["memory"].run_id):
+            s["health_gate"] = VerificationHealthGate(s["memory"],health_threshold).evaluate(issues=factual_issues)
         return s
     def evidence(s):
         return initial.invoke(s)
@@ -533,7 +544,8 @@ def build_full_graph(*, retriever=None, document_llm=None, financial_llm=None, b
                 s["retry_execution"]["nodes"] += (stances if bull_bear else ()) + (("critic",) if critic else ())
         elif critic and s["memory"].get_contradictions():
             from agents.critic_agent import CriticAgent
-            s["critic_result"]=CriticAgent(s["memory"]).check_contradictions(run_iteration=1,exhausted=True)
+            with track_stage("critic", s["memory"].run_id):
+                s["critic_result"]=CriticAgent(s["memory"]).check_contradictions(run_iteration=1,exhausted=True)
             s["retry_execution"]["nodes"] += ("critic:mechanical",)
         return refresh(s)
     def final(s):
@@ -552,9 +564,7 @@ def build_full_graph(*, retriever=None, document_llm=None, financial_llm=None, b
         return s
     builder = StateGraph(ExtendedState)
     for name, fn in (("evidence",evidence),("adversarial",reasoning),("planner_retry",allocate),("targeted_retry",targeted),("final_report",final)):
-        def timed(s, fn=fn,name=name):
-            start=perf_counter(); update=fn(dict(s)); update["stage_timings_ms"]={**update.get("stage_timings_ms",{}),name:(perf_counter()-start)*1000}; return update
-        builder.add_node(name,timed)
+        builder.add_node(name, timed_node(name, lambda s, fn=fn: fn(dict(s))))
     builder.add_edge(START,"evidence")
     builder.add_conditional_edges("evidence",lambda s:"adversarial" if s["health_gate"].decision == "passed" else "planner_retry",["adversarial","planner_retry"])
     builder.add_edge("adversarial","planner_retry")

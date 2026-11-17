@@ -16,7 +16,7 @@
     </a>
     <nav aria-label="Workspace">
       <a href="#overview" aria-current="location"><span class="nav-icon grid-icon" aria-hidden="true">▦</span> Overview</a>
-      <a href="#suites"><span class="nav-icon" aria-hidden="true">›_</span> Test suites</a>
+      <a href="#comparison"><span class="nav-icon" aria-hidden="true">⇄</span> Model comparison</a>
       <a href="#samples"><span class="nav-icon" aria-hidden="true">▤</span> Sample library</a>
       <a href="#gemini"><span class="nav-icon" aria-hidden="true">⌁</span> Model setup</a>
       <a href="#history"><span class="nav-icon" aria-hidden="true">◷</span> Run history</a>
@@ -26,22 +26,14 @@
   <main>
     <div class="workspace" id="overview">
       <header class="page-header">
-        <div>
-          <p class="section-label">MAFIS / Testing</p>
-          <h1>Test workspace</h1>
-          <p>Run financial analysis workflows and inspect the evidence behind every result.</p>
-        </div>
-        <button class="button primary" type="button" data-suite="all"><span aria-hidden="true">▶</span> Run all tests</button>
+        <p class="section-label">MAFIS / Testing</p>
+        <h1>Test workspace</h1>
+        <p>Run financial analysis workflows and inspect the evidence behind every result.</p>
       </header>
-
-      <div class="status-grid" aria-label="Environment status">
-        <article class="status-card"><span class="status-icon" aria-hidden="true">›_</span><div><h2>Default execution</h2><p>Offline mock <span class="tag green">No API cost</span></p></div></article>
-        <article class="status-card"><span class="status-icon" aria-hidden="true">▤</span><div><h2>Sample documents</h2><p><span id="sample-count">…</span> annual reports</p></div></article>
-        <a class="status-card" href="#gemini"><span class="status-icon" aria-hidden="true">⌁</span><div><h2>Gemini credential</h2><p id="key-status">Checking setup…</p></div><span class="status-arrow" aria-hidden="true">↗</span></a>
-      </div>
 
       <p id="notice" class="notice" role="status" hidden></p>
       <div class="workbench">
+        <div class="workbench-column">
         <section class="panel" aria-labelledby="scenario-title">
           <div class="panel-head"><span class="panel-icon" aria-hidden="true">▷</span><div><h2 id="scenario-title">Run a scenario</h2><p>Choose a workflow and a document to test.</p></div></div>
           <form id="scenario-form" class="scenario-form">
@@ -77,27 +69,44 @@
           </form>
         </section>
 
+        <section id="workflow-panel" class="panel workflow-panel" aria-labelledby="workflow-title">
+          <div class="panel-head"><span class="panel-icon" aria-hidden="true">↳</span><div><h2 id="workflow-title">Live workflow</h2><p id="workflow-current" role="status">Start a run to follow its stages.</p></div></div>
+          <div class="workflow-body">
+            <ol id="workflow-stages" class="workflow-stages" aria-label="Workflow stages"></ol>
+            <p id="workflow-detail" class="workflow-detail" hidden></p>
+          </div>
+        </section>
+        <section id="shared-memory" class="panel memory-panel" aria-labelledby="memory-title">
+          <div class="panel-head"><span class="panel-icon" aria-hidden="true">▤</span><div><h2 id="memory-title">Shared Memory</h2><p>Open a record to inspect its details.</p></div><span id="memory-status" class="tag neutral" role="status">Ready</span></div>
+          <p id="memory-empty">Run a scenario to see sources, claims and calculations as they are written.</p>
+          <div id="memory-feed" class="memory-feed" tabindex="0" aria-label="Shared Memory entries, newest first" hidden></div>
+        </section>
+        </div>
+
         <section class="panel results" aria-labelledby="results-title">
           <div class="panel-head"><span class="panel-icon" aria-hidden="true">›_</span><div><h2 id="results-title">Run output</h2><p id="run-label">Waiting for a test to start</p></div><span id="run-status" class="tag neutral" role="status">Idle</span></div>
           <div id="run-details" class="run-details" hidden></div>
           <div id="artifacts" class="artifacts" aria-label="Run downloads" hidden></div>
-          <div class="console">
-            <div class="console-top"><span class="dot"></span> Terminal output</div>
-            <div id="log-empty" class="console-empty"><span aria-hidden="true">›_</span><p>No output yet</p><small>Start a scenario or test suite to see the results here.</small></div>
-            <pre id="log" tabindex="0" aria-label="Terminal output" hidden></pre>
+          <div class="run-panes">
+            <div class="console">
+              <div class="console-top"><span class="dot"></span> Terminal output</div>
+              <div id="log-empty" class="console-empty"><span aria-hidden="true">›_</span><p>No output yet</p><small>Start a scenario to see the results here.</small></div>
+              <pre id="log" tabindex="0" aria-label="Terminal output" hidden></pre>
+            </div>
           </div>
         </section>
       </div>
 
-      <section id="suites" class="section" aria-labelledby="suites-title">
-        <div class="section-head"><div><h2 id="suites-title">Test suites</h2><p>Run the complete regression or check a specific subsystem.</p></div><span class="tag neutral">Pytest · offline</span></div>
-        <div id="suite-list" class="card-grid"></div>
-        <div class="section-head subhead"><div><h3>Evaluation checks</h3><p>Measure retrieval, document coverage and the offline baseline.</p></div></div>
-        <div id="evaluation-list" class="card-grid"></div>
+      <section id="comparison" class="section" aria-labelledby="comparison-title">
+        <div class="section-head"><div><h2 id="comparison-title">Model comparison</h2><p>Compare the same Apple FY2024 question using a single DeepSeek-R1 call and the full MAFIS workflow.</p></div></div>
+        <div class="panel provider-panel">
+          <div><h3>Apple benchmark · Local Ollama</h3><p>Compare results, source citations, requests and wall time.</p></div>
+          <button class="button primary" type="button" data-check="apple-benchmark">Run Apple benchmark</button>
+        </div>
       </section>
 
       <section id="samples" class="section" aria-labelledby="samples-title">
-        <div class="section-head"><div><h2 id="samples-title">Sample library</h2><p>Use the bundled FY2024 filings to exercise the financial workflow.</p></div></div>
+        <div class="section-head"><div><h2 id="samples-title">Sample library</h2><p>Use the bundled FY2024 filings to exercise the financial workflow.</p></div><span id="sample-count" class="tag neutral" hidden></span></div>
         <div id="sample-list" class="card-grid"></div>
       </section>
 
@@ -110,8 +119,8 @@
           <button class="button secondary" type="button" data-check="ollama">Check Ollama access</button>
         </div>
         <div class="panel provider-panel">
-          <div><h3 id="key-heading">Checking for a credential…</h3>
-            <p>Set <code>GEMINI_API_KEY</code> or <code>GOOGLE_API_KEY</code> in the repository’s <code>.env</code>. The check makes model metadata requests and uses zero generation tokens.</p>
+          <div><h3>Gemini key setup</h3>
+            <p>Configure the Gemini key in the repository’s <code>.env</code> file using <code>GEMINI_API_KEY</code> or <code>GOOGLE_API_KEY</code>. The access check uses model metadata and zero generation tokens.</p>
             <p>Live testing needs an eligible model and available project quota. Check the tier and limits in <a href="https://aistudio.google.com/usage" target="_blank" rel="noreferrer">Google AI Studio</a>.</p>
           </div>
           <button id="check-key" class="button secondary" type="button" data-check="key">Check Gemini access</button>

@@ -1,6 +1,6 @@
 # MAFIS course presentation based on the project report
 
-- `MAFIS_AI_Project_Green_Orange.pptx` has 16 slides with embedded notes, editable workflow shapes and tables, a retrieval chart and an animated demo.
+- `MAFIS_AI_Project_Benchmark.pptx` has 16 slides with embedded notes, editable workflow shapes and tables, a retrieval chart and an animated demo.
 - `report_slide_blueprint.md` contains the exact copy, visual placement and speaker notes for all 16 slides.
 - `build_deck.py`: recreates the deck and blueprint with python-pptx. Its source files and assets are all local.
 - `generate_simulation.py`: converts the saved NVIDIA correction trace into a looping GIF. Start Slide Show on slide 13 to see it play; if your viewer displays only a still, open `assets/nvidia_correction.gif`.
@@ -31,4 +31,4 @@ If the local demo directory is absent (for example, on a fresh checkout), regene
 
 For a separate demo directory, pass `--demo-dir path/to/demo` to both asset generators. The standalone GIF script validates the gate, retry, verification and net-margin records before making frames.
 
-The deck follows the completed `report things/MAFIS Project Report.docx` and the grading instructions in `report things/Final Guidelines.docx.pdf`. Slides 3–6 cover the report's literature review, state space, knowledge representation and NVIDIA constraint example. Slide 10 reproduces the report's calculation table. Slides 14 and 15 reproduce the baseline and ablation results.
+The deck uses the repository implementation and saved runs for technical claims, and follows the grading instructions in `report things/Final Guidelines.docx.pdf`. The project report supplies literature context and the NVIDIA filing excerpt. Slide 10 presents the offline closeout calculation table. Slide 14 uses the recorded local DeepSeek-R1 pair in `assets/apple_demo_scores.json`. Slide 15 shows the separate mock ablations.

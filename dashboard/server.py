@@ -12,12 +12,13 @@ import re
 import subprocess
 import sys
 from threading import Lock, Thread
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from dotenv import dotenv_values
 from pydantic import HttpUrl, ValidationError
 
+from memory.live_feed import FEED_ENV, FEED_NAME
 from scripts.test_lab import OUTPUT, ROOT, SCENARIOS, SUITES, WORKFLOWS, samples, write_json
 
 
@@ -25,15 +26,18 @@ ASSETS = Path(__file__).with_name("static")
 RUNS = OUTPUT / "dashboard"
 MAX_PDF = 25 * 1024 * 1024
 MAX_REQUEST = (MAX_PDF + 2) // 3 * 4 + 16384
+MEMORY_JOBS = ("sample", "apple-benchmark", "evaluation", "coverage")
+MEMORY_PAGE_BYTES = 256 * 1024
 CHECKS = {
     "retrieval": ("Semantic retrieval", "Score MiniLM Hit@5, Recall@5 and passage coverage against labeled PDFs."),
     "evaluation": ("Offline comparison", "Compare the full workflow and single-model baseline on development cases."),
+    "apple-benchmark": ("Apple benchmark · Local Ollama", "Run DeepSeek-R1 once and compare it with Full MAFIS on Apple FY2024."),
     "coverage": ("Source coverage", "Audit PDF coverage, missing sources and supported calculations across the fixture set."),
 }
 ARTIFACTS = ("report.md", "run_summary.json", "analysis_map.json", "evidence.json", "scenario.json",
              "gemini_readiness.json", "ollama_readiness.json", "retrieval.json", "results.json", "manifest.json",
-             "source_coverage.json", "run.log")
-RESULTS = ("scenario.json", "run_summary.json", "gemini_readiness.json", "ollama_readiness.json")
+             "source_coverage.json", "benchmark.md", "benchmark.json", "apple_baseline.md", "apple_mafis.md", "run.log")
+RESULTS = ("scenario.json", "run_summary.json", "gemini_readiness.json", "ollama_readiness.json", "benchmark.json")
 STATIC = {"/": ("index.html", "text/html"), "/styles.css": ("styles.css", "text/css"),
           "/app.js": ("app.js", "text/javascript")}
 
@@ -176,6 +180,9 @@ class JobStore:
     def execute(self, job, args, directory):
         command = [sys.executable, "-u", "-m", "scripts.test_lab", *args, "--output", str(directory)]
         env = {**os.environ, "PYTHONUTF8": "1", "ANONYMIZED_TELEMETRY": "False"}
+        env.pop(FEED_ENV, None)
+        if job["kind"] in MEMORY_JOBS:
+            env[FEED_ENV] = str(directory / FEED_NAME)
         if job["mode"] not in ("metadata", "live"):
             env.update(GEMINI_API_KEY="", GOOGLE_API_KEY="")
         with (directory / "run.log").open("wb") as log:
@@ -184,7 +191,7 @@ class JobStore:
             except OSError as exc:
                 log.write(f"Could not start test runner ({type(exc).__name__}).\n".encode())
                 exit_code = 1
-        status = "passed" if exit_code == 0 else "failed"
+        status = "failed" if exit_code else "completed" if job["kind"] == "apple-benchmark" else "passed"
         if job["kind"] in ("key", "sample"):
             name = "gemini_readiness.json" if job["kind"] == "key" else "scenario.json"
             path = directory / name
@@ -228,6 +235,52 @@ class JobStore:
                     results[name] = json.loads((directory / name).read_text(encoding="utf-8"))
         return {**job, "artifacts": artifacts, "log": log, "log_clipped": clipped, "results": results}
 
+    def memory(self, job_id, cursor):
+        # Read job status before the feed. A terminal status means the worker has
+        # closed the file, so the final response can safely finish at EOF.
+        with self.lock:
+            job = self.jobs[job_id]
+        response = {"status": job["status"], "source": None, "entries": [], "stages": [],
+                    "cursor": cursor, "has_more": False}
+        if job["kind"] not in MEMORY_JOBS:
+            return response
+        directory = RUNS / job_id
+        try:
+            feed = (directory / FEED_NAME).open("rb")
+        except FileNotFoundError:
+            if job["status"] == "running":
+                return {**response, "source": "live"}
+            snapshot = directory / ("mafis/evidence.json" if job["kind"] == "apple-benchmark" else "evidence.json")
+            if snapshot.is_file():
+                evidence = json.loads(snapshot.read_text(encoding="utf-8"))
+                categories = {"sources": "source", "claims": "claim", "calculations": "calculation",
+                              "verification_records": "verification", "contradictions": "contradiction",
+                              "retry_decisions": "retry", "gate_history": "health_gate"}
+                return {**response, "source": "snapshot", "entries": [
+                    {"run_id": evidence["run_id"], "kind": kind, "record": record}
+                    for key, kind in categories.items() for record in evidence.get(key, [])
+                ]}
+            return {**response, "source": "live"}
+
+        with feed:
+            if cursor:
+                feed.seek(cursor - 1)
+                if feed.read(1) != b"\n":
+                    raise ValueError("Invalid Shared Memory cursor.")
+            position = cursor
+            entries = []
+            while position - cursor < MEMORY_PAGE_BYTES:
+                line = feed.readline()
+                if not line.endswith(b"\n"):
+                    break
+                entries.extend(json.loads(line))
+                position = feed.tell()
+            has_more = position - cursor >= MEMORY_PAGE_BYTES and bool(feed.read(1))
+        stages = [entry["record"] for entry in entries if entry["kind"] == "stage"]
+        records = [entry for entry in entries if entry["kind"] != "stage"]
+        return {**response, "source": "live", "entries": records, "stages": stages,
+                "cursor": position, "has_more": has_more}
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -269,7 +322,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.trusted_host():
             return self.send_json({"error": "Use the dashboard's local address."}, HTTPStatus.FORBIDDEN)
-        path = urlsplit(self.path).path
+        url = urlsplit(self.path)
+        path = url.path
         jobs = self.server.jobs
         if path in STATIC:
             filename, media = STATIC[path]
@@ -291,6 +345,14 @@ class Handler(BaseHTTPRequestHandler):
         if run and run[1] in jobs.jobs:
             if run[2] is None:
                 return self.send_json(jobs.detail(run[1]))
+            if run[2] == "memory":
+                cursor = parse_qs(url.query, keep_blank_values=True).get("after", ["0"])[0]
+                if not re.fullmatch(r"[0-9]{1,16}", cursor):
+                    return self.send_json({"error": "Invalid Shared Memory cursor."}, HTTPStatus.BAD_REQUEST)
+                try:
+                    return self.send_json(jobs.memory(run[1], int(cursor)))
+                except ValueError as exc:
+                    return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             artifact = RUNS / run[1] / run[2]
             if run[2] in ARTIFACTS and artifact.is_file():
                 return self.send_data(artifact.read_bytes(), "text/plain; charset=utf-8", filename=run[2])

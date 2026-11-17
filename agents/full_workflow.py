@@ -13,6 +13,7 @@ from agents.risk_agent import RiskAgent
 from agents.planner import PlannerAgent
 from agents.verification_agent import VerificationAgent
 from agents.verification_gate import VerificationHealthGate
+from memory.live_feed import track_stage
 from memory.shared_memory import ReanalysisRequest
 
 
@@ -87,15 +88,18 @@ def run_reasoning(state, retriever, bull_llm, bear_llm, critic_llm, *, stances=(
         old = state.get(key)
         if old:
             issues = [i for i in issues if i not in old.issues]
-        result = cls(memory,llm).build_case(snapshot=snapshot,run_iteration=iteration)
-        VerificationAgent(memory,retriever).verify_all([r.claim_id for r in result.claim_refs if not memory.is_current_verified(r.claim_id)])
+        with track_stage(component.lower(), memory.run_id):
+            result = cls(memory,llm).build_case(snapshot=snapshot,run_iteration=iteration)
+        with track_stage("verification", memory.run_id):
+            VerificationAgent(memory,retriever).verify_all([r.claim_id for r in result.claim_refs if not memory.is_current_verified(r.claim_id)])
         state[key] = result.model_copy(update={"claim_refs":tuple(memory.reference(r.claim_id) for r in result.claim_refs)})
         issues.extend(result.issues)
     if critic:
         old = state.get("critic_result")
         if old:
             issues = [i for i in issues if i not in old.issues]
-        state["critic_result"] = CriticAgent(memory,critic_llm).check_contradictions(run_iteration=iteration,exhausted=not memory.retry_budget_remaining)
+        with track_stage("critic", memory.run_id):
+            state["critic_result"] = CriticAgent(memory,critic_llm).check_contradictions(run_iteration=iteration,exhausted=not memory.retry_budget_remaining)
         issues.extend(state["critic_result"].issues)
     state["issues"] = tuple(issues)
     return state
@@ -121,24 +125,29 @@ def execute_targeted(state, decision, retriever, document_llm, financial_llm, ma
     def verify(agent):
         ids = [c.claim_id for c in memory.get_claims() if c.agent == agent and not memory.is_current_verified(c.claim_id)]
         if ids:
-            VerificationAgent(memory,retriever).verify_all(ids)
+            with track_stage("verification", memory.run_id):
+                VerificationAgent(memory,retriever).verify_all(ids)
             actual.append("verify:"+agent)
     if "DocumentAgent" in decision.rerun_nodes:
-        result = DocumentAgent(memory,retriever,document_llm,source_id=state["source_id"],allow_revisions=True,run_iteration=1).extract_primitives(
-            state["question"],metrics=decision.metrics or state["plan"].metrics)
+        with track_stage("document", memory.run_id):
+            result = DocumentAgent(memory,retriever,document_llm,source_id=state["source_id"],allow_revisions=True,run_iteration=1).extract_primitives(
+                state["question"],metrics=decision.metrics or state["plan"].metrics)
         replace("document_result",result); actual.append("DocumentAgent"); verify("DocumentAgent")
     if "FinancialAgent" in decision.rerun_nodes:
         ids = [c.claim_id for c in memory.get_claims() if c.claim_type == "raw_primitive" and memory.is_current_verified(c.claim_id)]
-        result = FinancialAgent(memory,financial_llm,stable_ids=True,run_iteration=1).analyze(state["question"],
-            operations=decision.operations, primitive_claim_ids=ids,target_year=state["plan"].target_year)
+        with track_stage("financial", memory.run_id):
+            result = FinancialAgent(memory,financial_llm,stable_ids=True,run_iteration=1).analyze(state["question"],
+                operations=decision.operations, primitive_claim_ids=ids,target_year=state["plan"].target_year)
         replace("financial_result",result); actual.append("FinancialAgent"); verify("FinancialAgent")
     if "MarketAgent" in decision.rerun_nodes:
-        result = MarketAgent(memory,retriever).research(state["question"],filters=market_filters or {"doc_id":state["source_id"],"kind":"narrative"},as_of=as_of)
+        with track_stage("market", memory.run_id):
+            result = MarketAgent(memory,retriever).research(state["question"],filters=market_filters or {"doc_id":state["source_id"],"kind":"narrative"},as_of=as_of)
         replace("market_result",result); actual.append("MarketAgent"); verify("MarketAgent")
     if "RiskAgent" in decision.rerun_nodes:
         financial = [memory.reference(c.claim_id) for c in memory.get_claims() if c.agent == "FinancialAgent" and memory.is_current_verified(c.claim_id)]
         market = [memory.reference(c.claim_id) for c in memory.get_claims() if c.agent == "MarketAgent" and memory.is_current_verified(c.claim_id)]
-        result = RiskAgent(memory,retriever,stable_ids=True,run_iteration=1).assess_risk(financial,market,categories=risk_categories,as_of=as_of)
+        with track_stage("risk", memory.run_id):
+            result = RiskAgent(memory,retriever,stable_ids=True,run_iteration=1).assess_risk(financial,market,categories=risk_categories,as_of=as_of)
         replace("risk_result",result); actual.append("RiskAgent"); verify("RiskAgent")
     state["issues"] = tuple(issues)
     state["retry_execution"] = {"decision_id":decision.decision_id,"nodes":tuple(actual),

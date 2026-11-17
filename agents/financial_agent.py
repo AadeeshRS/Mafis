@@ -7,6 +7,7 @@ from typing import Literal
 from agents.contracts import AgentIssue
 from engine.financial_engine import CalculationRequest, FinancialEngine
 from gemini import ModelOutputError, ModelUnavailable
+from memory.live_feed import track_stage
 from memory.shared_memory import (
     CalculationOperation, Claim, ClaimVersionRef, EvidenceModel, SharedMemory,
 )
@@ -158,7 +159,8 @@ class FinancialAgent:
                     claim = self.interpret_result(reusable.calculation_ref)
                     references.append(self.memory.reference(claim.claim_id))
                     continue
-                result = self.engine.calculate(request)
+                with track_stage("engine", self.memory.run_id):
+                    result = self.engine.calculate(request)
                 if result.status != "success":
                     issues.append(AgentIssue(code="calculation_rejected",
                         message=operation + ": " + "; ".join(f.code for f in result.findings)))

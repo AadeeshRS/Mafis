@@ -16,7 +16,7 @@ from pptx.oxml.ns import qn
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
 
-from evidence import ASSETS, HERE, closeout, filing_results
+from evidence import ASSETS, HERE, closeout, filing_results, read_json
 
 W, H = 13 + 1/3, 7.5
 M = .64
@@ -225,7 +225,7 @@ class Deck:
         assert len(self.p.slides) == len(self.records) == 16
         md = ["# MAFIS slide blueprint", "",
               "16 slides, 16:9. Poppins. Deep green (#013230), cream (#F3EBDD) and orange (#FF6A1F).", "",
-              "Main source: `report things/MAFIS Project Report.docx`. "
+              "Sources: current implementation, saved workflow runs and the offline evaluation records. "
               "Course rubric: `report things/Final Guidelines.docx.pdf`.", ""]
         for i, r in enumerate(self.records, 1):
             visible = [*r["text"], f"{i:02}"]
@@ -266,6 +266,9 @@ def build(assets):
     data = closeout()
     arms = data["arms"]
     filings = filing_results()
+    demo = read_json(assets / "apple_demo_scores.json")
+    baseline, full = (demo["arms"][arm] for arm in ("baseline", "mafis"))
+    metric_names = ["Revenue growth", "Operating margin", "Net margin", "Current ratio"]
     deck = Deck(assets)
     report = "report things/MAFIS Project Report.docx"
     results = "evaluation/results.md"
@@ -288,35 +291,39 @@ def build(assets):
         text(value, M+.17, y+.10, W-2*M-.34, .42, 14, WHITE if dark else PINE, bold=True)
 
     add("MAFIS", "Artificial Intelligence course project", "Dark cover with title and two results.",
-        "Project scope on the left, closeout findings on the right.",
-        "MAFIS takes a question and a company filing and produces an analysis a reader can check back to the source. "
-        "I'll show how we assign filing cells to calculations, what happens when a required cell is missing, and what "
-        "our offline experiments actually measured. Seven companies yielded four correct calculations each in the closeout.",
-        results, cover=True, dark=True)
+        "Project scope on the left, Apple demo and retrieval findings on the right.",
+        "MAFIS takes a question and a company filing and gives the reader a cited answer. A disclosure question can "
+        "return checked excerpts, while a financial analysis can trace its calculations to filing cells. I'll show "
+        "how we assign those cells to calculations, what happens when a required cell is missing, and what "
+        "we measured in the Apple FY2024 demonstration. Both workflows ran local DeepSeek-R1. Full MAFIS delivered "
+        "four results with correct values and inputs, and the single-call baseline delivered zero. The saved runs use one development filing.",
+        "Readme.md", "agents/question_answer.py", demo["source"], results, cover=True, dark=True)
     text("MAFIS", M-.04, 1.33, 7.2, 1.56, 77, WHITE, bold=True)
     text("Multi-Agent Financial\nIntelligence System", M, 3.02, 7.05, 1.25, 30, WHITE, bold=True)
-    text("Trace annual filing answers back to the exact cells and calculations behind them.",
+    text("Cited filing answers with local DeepSeek-R1 and a deterministic financial engine.",
          M, 4.70, 6.77, .97, 20, LIGHT)
     deck.line(8.00, 1.36, 8.00, 6.42, "506B60")
-    text(str(data["engine_ops"]), 8.39, 1.79, 4.17, 1.00, 52, ORANGE, bold=True)
-    text("correct calculations across seven admitted filings", 8.43, 2.90, 4.16, .78, 17, WHITE)
+    text(f"{full['fully_supported']}/4", 8.39, 1.79, 4.17, 1.00, 52, ORANGE, bold=True)
+    text(f"fully supported results in the Apple demo vs {baseline['fully_supported']}/4 for single DeepSeek",
+         8.43, 2.90, 4.20, .91, 16, WHITE)
     text(f"{data['pages'][0]}/{data['pages'][1]}", 8.39, 3.98, 4.17, .95, 49, APRICOT, bold=True)
     text("labelled queries found the right PDF page in the top five", 8.43, 5.05, 4.16, .87, 17, WHITE)
 
-    add("The right row can contain the wrong answer", "Introduction", "Problem and example above an objective band.",
+    add("The correct row can contain the wrong answer", "Introduction", "Problem and example above an objective band.",
         "Question, source ambiguity and supported outputs appear in two columns.",
         "A filing row can contain several years. Finding the revenue row is only the first step. For the NVIDIA example, "
         "the system also needs to choose the right fiscal column and preserve the scale in millions. A balance-sheet "
-        "number is a position on a date, while income describes activity over a period. We compare the checked workflow "
-        "against a single model call on common source material.", "graph.py", "tests/fixtures/nvidia_2024/annual_report.pdf")
-    block("Task", "Answer an annual financial question using the company filing and a dated market source.",
+        "number is a position on a date, while income describes activity over a period. For a disclosure question, "
+        "the answer is drawn from verified passages. We compare the full financial workflow against a single model "
+        "call on common source material.", "graph.py", "agents/question_answer.py", "tests/fixtures/nvidia_2024/annual_report.pdf")
+    block("Task", "Answer questions about a filing. Full financial analysis also draws on dated market context.",
           M, 1.88, 5.55, 1.24)
     block("A concrete risk", "The NVIDIA revenue row contains FY2024, FY2023 and FY2022. The chosen cell must match the requested fiscal period.",
           6.75, 1.88, 5.94, 1.52)
     deck.line(M, 3.46, W-M, 3.46)
-    block("Four supported outputs", "Annual revenue growth, operating margin, net margin and the current ratio.",
+    block("Four financial calculations", "Annual revenue growth, operating margin, net margin and the current ratio.",
           M, 3.80, 5.55, 1.23)
-    block("Design objective", "Bind the answer to eligible source cells. Publish a partial report when a required input is missing.",
+    block("Design objective", "Link each answer to filing evidence. Show which inputs or disclosures the source leaves unavailable.",
           6.75, 3.80, 5.94, 1.52)
     band("Can source checks, exact arithmetic and a targeted correction improve annual filing analysis?")
 
@@ -345,9 +352,10 @@ def build(assets):
         "Editable state tuple, transition chain and search comparison.",
         "This is the report's state-space abstraction of ExtendedState. We start with a question, its document descriptor "
         "and a fresh run store. Every transition changes the plan, evidence, verification status or retry budget. "
-        "The report is our terminal state and it can be complete or partial. The stages and branch conditions are known. "
+        "The Test Lab routes a disclosure question to document lookup. The financial path plans requested facts "
+        "and operations. Both routes end with a cited answer or a record of what evidence is missing. "
         "The system searches the evidence index by cosine distance, so BFS over alternative workflows would solve a different problem.",
-        graph, "agents/planner.py::allocate_retry", "rag/retriever.py::SharedRetriever")
+        graph, "agents/planner.py::PlannerAgent", "scripts/test_lab.py::sample_run", "rag/retriever.py::SharedRetriever")
     deck.box(M, 1.63, W-2*M, 1.04, RUST_LIGHT)
     text("S = (q, d, p, M, g, b, i)", M+.22, 1.74, 5.45, .61, 24, RUST, bold=True)
     text("Question, document, plan, SharedMemory,\ngate decision, retry budget, issues",
@@ -355,8 +363,8 @@ def build(assets):
     deck.flow(["Initial state", "Graph transitions", "Terminal state"], 3.03, gap=.46, h=.69,
               tones=["neutral", "rust", "pine"], size=16)
     text("Question and document\nFresh run store", M+.12, 3.95, 3.52, .90, 15)
-    text("Plan, ingest, extract, verify,\ncalculate, interpret and report", 4.83, 3.95, 3.62, 1.03, 15)
-    text("Complete traceable analysis\nor partial report with issues", 8.98, 3.95, 3.58, 1.03, 15)
+    text("Route the question, retrieve,\nverify and calculate if needed", 4.83, 3.95, 3.62, 1.03, 15)
+    text("Cited answer and report\nEvidence gaps when applicable", 8.98, 3.95, 3.58, 1.03, 15)
     block("Where search happens", "LangGraph follows prescribed stages and checks branch conditions. SharedRetriever ranks evidence by cosine distance.",
           M, 5.33, 12, 1.23)
 
@@ -406,30 +414,35 @@ def build(assets):
         "Four-stage pipeline above retrieval settings.",
         "Editable source-to-selection workflow and paired interpretation of retrieval parameters.",
         "The parser reads born-digital annual filings. Narrative windows preserve page boundaries and table chunks retain "
-        "headers, typed cells and evidence locations. The embedding model is all-MiniLM-L6-v2 through ONNX on the CPU. "
-        "Chroma ranks by cosine distance after applying metadata filters. DocumentAgent asks for a schema-bound choice "
-        "of cells and quotes and checks the choice against the index.",
-        "rag/ingest.py::prepare_document", "rag/retriever.py::SharedRetriever", "agents/document_agent.py::collect_context")
+        "headers, typed cells and evidence locations. The Apple benchmark uses all-MiniLM-L6-v2 text embeddings "
+        "through ONNX on the CPU. DeepSeek-R1 handles generation and selection on this machine. "
+        "Chroma ranks by cosine distance after applying metadata filters. Structured analysis uses a schema-bound "
+        "choice of cells and quotes. In document lookup, the model chooses up to three excerpt IDs from the five "
+        "retrieved narrative chunks. The code resolves the IDs to verbatim text and the verifier checks the citation.",
+        "config.py::EMBEDDING_MODEL", "rag/ingest.py::prepare_document", "rag/retriever.py::SharedRetriever", "agents/document_agent.py::collect_context")
     deck.flow(["Parse PDF", "Chunk text\nand tables", "Filter and\nrank in Chroma", "Select cells\nand quotations"], 1.83,
               h=.91, gap=.41, tones=["neutral", "rust", "rust", "pine"], size=16)
     block("Narrative windows", "Page text 900 characters with 150 overlap. Section text 800 characters with 100 overlap.",
           M, 3.16, 5.66, 1.29)
     block("Structured table chunks", "Retain the exact statement row, fiscal header, units and source locator.",
           6.82, 3.16, 5.87, 1.29)
-    block("Similarity search", "CPU embeddings from all-MiniLM-L6-v2. Cosine distance within document and task filters.",
+    block("Text embeddings", "all-MiniLM-L6-v2 runs on CPU. Chroma ranks by cosine distance within document and task filters.",
           M, 4.61, 5.66, 1.31)
-    block("Context passed to DocumentAgent", "Up to 3 hits per narrative query and 5 per metric-specific table query.",
-          6.82, 4.61, 5.87, 1.31)
-    band("The pretrained encoder and Gemini adapter run inference. The project uses no training or fine-tuning.")
+    block("Retrieval limits", "Analysis uses up to 3 hits per narrative query and 5 per table query. Document Q&A selects up to 3 excerpts from 5 narrative hits.",
+          6.82, 4.61, 5.87, 1.48)
+    band("MiniLM and the generation models run inference. The project uses no training or fine-tuning.")
 
-    add("Verification determines the next stage", "Implementation / Full workflow",
+    add("Verification determines the next stage", "Implementation / Workflow",
         "Two-row workflow recreated from report Figure 1.",
-        "Upper row shows the evidence path. Lower row shows the Pass and Blocked branches and the shared retry.",
+        "The main diagram shows full financial analysis. A separate strip summarizes document Q&A.",
         "Planner decides scope, then we prepare the filing and select and verify its primitives. Financial and dated "
         "Market findings feed Risk, which is also verified. The gate checks the current evidence. If it passes, Bull "
         "and Bear use the same checked claims and Critic tests their structured assertions. A blocked gate routes "
-        "straight to Planner. A retry reruns affected dependencies, and the final report lists any unresolved issues.",
-        graph, "agents/full_workflow.py", "agents/report_agent.py")
+        "straight to Planner. A retry reruns affected dependencies. Early planning or ingestion failures route to the "
+        "gate. In document Q&A, the verifier checks the selected quotations before the report and answer use them. "
+        "Test Lab shows the answer and offers the Markdown report for download. Its Shared Memory feed displays "
+        "committed claims, calculation artifacts and stage events as the run proceeds.",
+        graph, "agents/full_workflow.py", "agents/report_agent.py", "agents/question_answer.py", "dashboard/server.py", "memory/live_feed.py")
     deck.flow(["Planner\nSet scope", "Prepare PDF\nParse + index", "DocumentAgent\nSelect + verify",
                "Financial, Market, Risk\nCheck findings", "Health Gate\nTest eligibility"], 1.81,
               h=1.02, size=13.3, tones=["neutral", "rust", "rust", "rust", "pine"])
@@ -450,30 +463,33 @@ def build(assets):
     deck.line(4.99, 5.73, 11.37, 5.73, MUTED)
     deck.line(11.37, 5.73, 11.37, y+.98, MUTED, arrow=True)
     text("No retry needed or available", 6.37, 5.83, 3.49, .33, 12, MUTED)
-    text("A planning or ingestion failure routes directly to the gate.", M, 6.42, 12, .37, 14, MUTED)
+    band("Document Q&A   Retrieve passages → select excerpts → verify wording and pages → cited answer.")
 
     add("Models propose. Rules decide eligibility.", "Implementation / Agents and settings",
         "Two responsibility columns above a settings strip.",
         "Left presents model roles. Right presents arithmetic, screening and routing checks.",
         "DocumentAgent selects filing cells. FinancialAgent selects allowed operations. The Bull and Bear agents use "
         "the same verified snapshot, and an optional Critic model call describes findings already detected by rules. "
-        "The arithmetic runs in a 50-digit Decimal context, with half-up rounding only for the four-decimal display. "
-        "Market screens dated sources, Risk labels hypotheses, and the gate blocks on evidence failures. The 0.5 "
-        "default remained unchanged after an injected validation-only sweep from 0 to 1 in steps of 0.25.",
-        "config.py", "gemini.py::GeminiSettings", "agents/verification_gate.py", "agents/critic_agent.py",
+        "The arithmetic runs in a 50-digit Decimal context, with half-up rounding for the four-decimal display. "
+        "Market screens dated sources and Risk labels hypotheses. Ollama runs DeepSeek-R1 on the same machine. "
+        "It uses compact evidence IDs for structured selection and restores full references before agent checks. "
+        f"The Apple comparison used temperature {demo['settings']['temperature']}, thinking disabled and a "
+        f"{demo['settings']['output_tokens_per_request']:,}-token output cap for both arms. The injected validation sweep "
+        "from 0 to 1 in steps of 0.25 leaves the 0.5 engineering default in place.",
+        "config.py", "gemini.py::GeminiSettings", "ollama_adapter.py::OllamaAdapter", "agents/verification_gate.py", "agents/critic_agent.py",
         "engine/financial_engine.py", "evaluation/batch2.py::freeze_threshold")
     deck.line(6.57, 1.66, 6.57, 5.78)
     block("Model calls", "Document and Financial agents propose source cells and operations. Bull and Bear propose interpretations from one checked snapshot.",
           M, 1.70, 5.60, 1.73)
-    block("Deterministic checks", "VerificationAgent checks evidence and can replay calculations. Critic tests conflicts between typed claims.",
+    block("Deterministic checks", "Verification can replay 50-digit Decimal calculations. The Critic applies conflict rules to typed claims.",
           6.89, 1.70, 5.80, 1.64)
-    block("Adapter defaults", "gemini-3.8-flash, temperature 0, 4,096 output tokens, 30 s timeout and 2 transport retries.",
+    block("Local Ollama · deepseek-r1:8b", "4,096-token context and 8 KiB JSON request limit. Compact IDs resolve to exact filing references.",
           M, 3.57, 5.60, 1.46)
-    block("Engine and screening", "50-digit Decimal arithmetic, four displayed decimals. Market and Risk apply rules and qualify risk as a hypothesis.",
+    block("Demo settings for both arms", "Temperature 0, thinking disabled, 1,024 output tokens per request. Gemini is an opt-in cloud path.",
           6.89, 3.57, 5.80, 1.55)
     band("Health Gate blocks above 0.5 ineligible, on empty evidence or on explicit upstream issues. One analytical retry.")
 
-    add("Seven filings produced all four calculations", "Results / Source coverage",
+    add("Seven filings produced all four calculations", "Offline closeout / Source coverage",
         "Coverage metrics above the report’s seven-issuer result table.",
         "Editable reproduction of report Table 3, with fiscal-year percentages and unitless current ratios.",
         "Thirteen FY2024 source slots yielded ten local PDFs. Seven were admitted and each contributed six primitives "
@@ -517,8 +533,11 @@ def build(assets):
         "Intel lacked admissible currency evidence. Walmart's statement fonts lacked a usable Unicode mapping in "
         "this parser. Nike failed currency admission and lacked a separately reported operating-income row. "
         "Microsoft, Alphabet and Netflix were unavailable. The verifier and Critic were also tested on small "
-        "injected cases. The counts show which cases those rules caught. Those tests are separate from live comparisons.",
-        results, "evaluation/mechanisms.py", "tests/fixtures/batch2_cases.json")
+        "injected cases. The Apple document run shows a different kind of evidence gap. It verified a passage "
+        "describing market share qualitatively, and flagged the missing percentage. Verification checks wording "
+        "and source location, while coverage depends on whether the passage answers the question.",
+        results, "evaluation/mechanisms.py", "tests/fixtures/batch2_cases.json",
+        "output/test_lab/dynamic-apple-final/run_summary.json")
     deck.table([["Filing", "Why admission failed"],
                 ["Intel", "Reporting currency unestablished"],
                 ["Walmart", "Unsupported statement text encoding"],
@@ -530,7 +549,7 @@ def build(assets):
     deck.table([["Injected test", "TP", "TN", "FP", "FN"], *checks],
                7.62, 1.84, [2.09, .75, .75, .75, .73], .60, 13.3, center=(1, 2, 3, 4))
     text("Precision and recall 1.0 on these small injected sets.", 7.62, 3.94, 5.07, .70, 15, MUTED)
-    band("Repo closeout  ·  575 passing automated tests. Source failures stay in the requested-slot denominator.")
+    band("Apple FY2024, PDF p. 10  ·  The cited passage describes a minority smartphone share and gives no percentage.")
 
     add("One retry restores NVIDIA’s net margin", "Demonstration / Saved offline run",
         "Animated trace beside gate states and the recovered result.",
@@ -555,35 +574,41 @@ def build(assets):
     text("10 mock calls · 0 live requests", 8.89, 5.22, 3.79, .83, 15, LIGHT, bold=True)
     band("If the mock omits net income again, the report stays partial after the retry.", dark=True)
 
-    add("Three workflows share the same mock score", "Results / Baseline comparison",
-        "Baseline table followed by descriptions of the three paths.",
-        "Side-by-side counts for full MAFIS, single LLM and unified analyst, with each architecture’s role.",
-        "The full and single-call workflows begin with the same question, adapter settings, source evidence bundle "
-        "and dated market pool. The full workflow can also retrieve scoped evidence as needed. The unified "
-        "analyst combines selection and planning and keeps the engine. All three get 28 correct results across "
-        "52 requested slots with scripted model responses. The live comparator returned HTTP 503, leaving zero live pairs.",
-        results, "evaluation/batch2.py::CommonEvidence")
-    deck.table([["Condition", "Completed", "Correct / requested", "Mock calls", "Mean local s"]]
-               + [[name, str(arms[key][0]), f"{arms[key][2]}/{arms[key][3]}", str(arms[key][4]), f"{arms[key][5]:.3f}"]
-                  for key, name in [("full", "Full MAFIS"), ("single_llm", "Single LLM"),
-                                    ("unified_analyst", "Unified analyst")]],
-               M, 1.81, [3.07, 1.80, 2.73, 1.94, 2.51], .59, 14, center=(1, 2, 3, 4), highlight=(1,))
-    block("Full MAFIS", "Specialist calls, scoped retrieval, verified arithmetic and bounded correction.",
-          M, 4.51, 3.75, 1.51)
-    block("Single LLM", "One call. The model handles the report and arithmetic.",
-          4.73, 4.51, 3.74, 1.51)
-    block("Unified analyst", "One combined selection and planning call, with engine access.",
-          8.86, 4.51, 3.82, 1.51)
-    band("All three start with common source material. The full workflow can retrieve additional scoped evidence.")
+    add("Apple FY2024 demo benchmark", "Results / Paired local inference",
+        "Editable four-metric result table above the score and run counts.",
+        "Oracle values next to the outputs of single-call DeepSeek-R1 and Full MAFIS.",
+        "Both arms ran deepseek-r1:8b in Ollama with the same Apple question, filing, model settings and dated market source. "
+        "The single model calculated the metrics. Full MAFIS used its deterministic engine and additional verification retrieval. "
+        "A score requires the right value, fiscal period, unit and both input citations. Both arms cited the correct inputs for "
+        "four of four metrics. The baseline reports two decimal places, and all four values miss the numerical tolerance. "
+        "Narrative quality was unscored. Shared indexing was excluded from wall time, and run order, caches and warm-up can affect it. "
+        "The table uses the more recent saved run. An earlier run on the same development case reproduced the scores. "
+        "The Test Lab command is python -m scripts.test_lab apple-benchmark.",
+        "evaluation/apple_benchmark.py::run_apple_benchmark", demo["source"], demo["repeat_source"], "tests/fixtures/apple_2024/annotations.json")
+    text("Same local DeepSeek-R1, Apple filing and dated market evidence", M, 1.58, 12.05, .41, 15, MUTED)
+    benchmark_rows = []
+    for label, left, right in zip(metric_names, baseline["rows"], full["rows"], strict=True):
+        assert left["operation"] == right["operation"] and left["expected"] == right["expected"]
+        unit = "%" if left["unit"] == "percent" else "×"
+        benchmark_rows.append([label, left["expected"] + unit, left["observed"] + unit, right["observed"] + unit])
+    benchmark_rows.append(["Fully supported", "Value, unit, period + inputs", f"{baseline['fully_supported']}/4", f"{full['fully_supported']}/4"])
+    deck.table([["Metric", "Independent reference", "Single DeepSeek-R1", "Full MAFIS"], *benchmark_rows],
+               M, 2.10, [3.08, 3.12, 3.08, 2.77], .54, 14, center=(1, 2, 3), highlight=(5,))
+    text(f"Input citations {baseline['citations_correct']}/4 in both arms   ·   Requests {baseline['calls']} vs {full['calls']}   ·   "
+         f"Observed wall time {baseline['seconds']:.1f} s vs {full['seconds']:.1f} s", M, 5.60, 12.05, .41, 14.5, INK, bold=True)
+    band("One development filing. Wall time excludes shared indexing. Narrative quality was unscored.")
 
     add("What changes when components are removed", "Results / Ablations and trade-offs",
         "Five-row ablation table with timing and interpretation.",
         "Editable timing and call-count table, plus changes to the path each condition can exercise.",
-        "Every condition completed on seven admitted filings and retained six preparation failures. Over eight "
+        "This table is from the separate mock evaluation. Every condition completed on seven admitted filings and retained six preparation failures. Over eight "
         "conditions that gives 56 completions and 48 failures. Removing verification changes which claims can "
         "support the report. Removing the engine changes who does the arithmetic. The timings include retrieval "
-        "under concurrent validation load. Peak memory and live provider latency remain unmeasured.",
-        results, "evaluation/batch2.py::CONDITIONS", "evaluation/experimental.py")
+        "under concurrent validation load. In one saved Apple full run on Ollama, context compaction reduced "
+        "the cumulative context from 85,178 to 3,828 bytes across eight model requests. The context counts exclude "
+        "the rest of the request body. This is a run example. Controlled latency and peak memory remain unmeasured.",
+        results, "evaluation/batch2.py::CONDITIONS", "evaluation/experimental.py",
+        "output/test_lab/ollama-full-verify/scenario.json")
     ablations = [
         ("without_verification", "Verification", "Claims remain unchecked"),
         ("without_bull_bear", "Bull and Bear", "No paired interpretations"),
@@ -594,36 +619,39 @@ def build(assets):
     deck.table([["Component removed", "Change in execution", "Mock calls", "Mean local s"]]
                + [[name, effect, str(arms[key][4]), f"{arms[key][5]:.3f}"] for key, name, effect in ablations],
                M, 1.78, [3.0, 5.22, 1.77, 2.06], .60, 14, center=(2, 3))
-    text("Each condition had 28 correct outputs across 52 requested slots. Across all eight, 56 runs completed and 48 failed preparation.",
-         M, 5.64, 12.03, .54, 16, INK, bold=True)
-    text("Local runs include retrieval under concurrent load. Peak memory and live latency remain unmeasured.",
-         M, 6.40, 12.03, .42, 14, MUTED)
+    text("Mock evaluation  ·  28/52 correct per condition, 56 completions and 48 preparation failures.",
+         M, 5.55, 12.03, .42, 14.5, INK, bold=True)
+    text("Apple local example  ·  Context shrank from 85,178 to 3,828 bytes across 8 requests.",
+         M, 6.03, 12.03, .40, 14.5, RUST, bold=True)
+    text("Mock timings include retrieval under load. Controlled latency and peak memory remain unmeasured.",
+         M, 6.52, 12.03, .37, 13, MUTED)
 
-    add("The next test needs live pairs on unseen filings", "Discussion / Limits and next steps",
+    add("Paired evaluation on unseen filings", "Discussion / Limits and next steps",
         "Three limitation-and-action rows above an ethics band.",
         "Each gap from the report is paired with the next measurement.",
-        "The live comparator returned HTTP 503 after 3.890 seconds and produced no completed live pairs. "
-        "No human ratings have been imported. To test reliability, we'd run matched pairs on unseen filings, "
+        "The Apple runs exercised both arms on one known development filing. The next evaluation needs matched local "
+        "runs on unseen filings and repetitions to measure runtime variability. "
+        "No human ratings have been imported. To test reliability, we'd run those pairs, "
         "have independent reviewers trace the claims, and measure timing and peak memory under controlled conditions. "
         "We also need to record failures by filing format and keep missing evidence visible. In live mode, the question "
-        "and retrieved excerpts are sent to the model service.",
-        results, "evaluation/batch2.py::import_ratings", "tests/fixtures/batch2_cases.json", dark=True)
+        "and retrieved excerpts are sent to the model service. Ollama sends its requests to the local service.",
+        demo["source"], results, "evaluation/batch2.py::import_ratings", "tests/fixtures/batch2_cases.json", "ollama_adapter.py", dark=True)
     for y, issue, action in [
-        (1.67, "Zero completed live pairs", "Run matched full and single-call trials on unseen filings. Measure latency and peak memory."),
+        (1.67, "One development filing", "Repeat matched local trials on unseen filings. Measure latency variance and peak memory."),
         (3.07, "Zero imported reviewer ratings", "Grade numerical answers and source support independently against the filings."),
         (4.47, "Parser admission varies by filing", "Test new layouts and retain preparation failures in coverage by format."),
     ]:
         text(issue, M, y+.07, 5.03, .61, 18, WHITE, bold=True)
         text(action, 6.00, y+.06, 6.68, .85, 16, ORANGE)
         deck.line(M, y+1.11, W-M, y+1.11, "506B60")
-    band("Disclose missing evidence, label risk as a hypothesis and keep live model execution opt-in.", dark=True)
+    band("Expose evidence gaps, label risk as a hypothesis and keep cloud execution opt-in.", dark=True)
     return deck
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("--assets", type=Path, default=ASSETS)
-    parser.add_argument("--output", type=Path, default=HERE / "MAFIS_AI_Project_Green_Orange.pptx")
+    parser.add_argument("--output", type=Path, default=HERE / "MAFIS_AI_Project_Benchmark.pptx")
     parser.add_argument("--blueprint", type=Path, default=HERE / "report_slide_blueprint.md")
     args = parser.parse_args()
     build(args.assets).save(args.output, args.blueprint)

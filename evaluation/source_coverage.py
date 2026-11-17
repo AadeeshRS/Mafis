@@ -9,6 +9,9 @@ from rag.ingest import extract_financial_facts
 
 
 def main():
+    from memory.live_feed import configure_memory_feed
+
+    configure_memory_feed()
     parser=argparse.ArgumentParser()
     parser.add_argument("--cases",default="tests/fixtures/batch2_cases.json")
     parser.add_argument("--output",default="output/batch2/source_coverage.json")

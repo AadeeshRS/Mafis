@@ -3,12 +3,13 @@
 import base64
 from http.client import HTTPConnection
 import json
-from threading import Thread
+from threading import Event, Thread
 from time import monotonic, sleep
 
 import pytest
 
 from dashboard import server
+from memory.live_feed import FEED_ENV, FEED_NAME
 
 
 @pytest.fixture
@@ -65,6 +66,63 @@ def test_dashboard_missing_key_job_records_zero_requests(request_dashboard):
     status, artifact = request_dashboard("GET", f"{job_url}/gemini_readiness.json")
     assert status == 200
     assert artifact == readiness
+
+
+def test_dashboard_reads_new_memory_entries_while_worker_runs(request_dashboard, tmp_path, monkeypatch):
+    finish = Event()
+    worker_exited = Event()
+    paths = []
+
+    def paused_worker(command, *, env, **kwargs):
+        paths.append(env.get(FEED_ENV))
+        finish.wait(10)
+        worker_exited.set()
+        return 0
+
+    monkeypatch.setattr(server.subprocess, "call", paused_worker)
+    payload = {"kind": "sample", "case": "apple_2024", "workflow": "full", "scenario": "clean", "mode": "mock"}
+    status, job = request_dashboard("POST", "/api/runs", payload)
+    assert status == 202
+    feed = tmp_path / job["id"] / FEED_NAME
+    url = f"/api/runs/{job['id']}/memory"
+    entries = [{"run_id": "test", "kind": "claim", "record": {"claim_id": "income", "version": version}}
+               for version in (1, 2)]
+    stage = {"stage": "planner", "status": "running"}
+    try:
+        with feed.open("wb") as handle:
+            handle.write((json.dumps([{"run_id": "test", "kind": "stage", "record": stage}]) + "\n").encode())
+            handle.flush()
+            _, stage_page = request_dashboard("GET", url)
+            assert stage_page["stages"] == [stage] and stage_page["entries"] == []
+            assert stage_page["cursor"] > 0
+
+            handle.write((json.dumps(entries[:1]) + "\n").encode())
+            handle.write(json.dumps(entries[1:]).encode())
+            handle.flush()
+            status, page = request_dashboard("GET", f"{url}?after={stage_page['cursor']}")
+            assert status == 200 and page["status"] == "running"
+            assert page["entries"] == entries[:1]
+            assert page["stages"] == []
+
+            next_page = f"{url}?after={page['cursor']}"
+            assert request_dashboard("GET", next_page)[1]["entries"] == []
+            assert request_dashboard("GET", f"{url}?after=1")[0] == 400
+
+            handle.write(b"\n")
+            handle.flush()
+            status, page = request_dashboard("GET", next_page)
+            assert status == 200 and page["status"] == "running"
+            assert page["entries"] == entries[1:]
+    finally:
+        finish.set()
+        assert worker_exited.wait(5)
+    assert paths == [str(feed)]
+    deadline = monotonic() + 5
+    while page["status"] == "running" and monotonic() < deadline:
+        _, page = request_dashboard("GET", url)
+        sleep(0.01)
+    assert page["status"] == "passed"
+    assert page["entries"] == entries
 
 
 def test_custom_pdf_command_uses_local_path_and_requires_live_confirmation(tmp_path):
