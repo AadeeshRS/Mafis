@@ -80,3 +80,12 @@ def test_custom_pdf_command_uses_local_path_and_requires_live_confirmation(tmp_p
         server.build_command({**payload, "mode": "live"}, tmp_path)
     with pytest.raises(ValueError, match="Upload a PDF"):
         server.build_command({**payload, "pdf": base64.b64encode(b"not a PDF").decode()}, tmp_path)
+
+
+def test_dashboard_ollama_mode_needs_no_gemini_key(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "key_configured", lambda: False)
+    payload = {"kind": "sample", "case": "apple_2024", "workflow": "full", "scenario": "clean", "mode": "ollama"}
+    args, _, _ = server.build_command(payload, tmp_path)
+    assert "--ollama" in args and "--live" not in args
+    with pytest.raises(ValueError, match="offline mock"):
+        server.build_command({**payload, "scenario": "corrected"}, tmp_path)

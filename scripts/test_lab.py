@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 from pathlib import Path
 import subprocess
@@ -16,6 +17,7 @@ SAMPLE_IDS = ("nvidia_2024", "apple_2024", "coca_cola_2024", "amd_2024")
 WORKFLOWS = {"phase1": "Phase 1", "extended": "Extended", "full": "Full pipeline"}
 SCENARIOS = {
     "clean": ("Annual financial health", "Extract annual facts and calculate growth, margins and liquidity."),
+    "document": ("Ask the document", "Search the PDF for passages that answer your question and cite the pages."),
     "corrected": ("Recoverable evidence gap", "Omit net income once and expect a successful targeted retry."),
     "persistent": ("Persistent evidence gap", "Omit net income twice and expect a partial report after one retry."),
     "missing": ("Missing document", "Expect a partial report and zero model calls."),
@@ -32,7 +34,7 @@ SUITES = {
     "workflow": ("Workflow & reasoning", "Routing, all three workflows, Bull/Bear, Critic and targeted corrections.",
                  ("planner", "pipeline", "batch1_integration", "batch2_full", "batch2_reasoning", "closeout_regressions", "test_lab")),
     "provider": ("Provider & evaluation", "Mock SDK failures, retry budgets, baselines and evaluation metrics.",
-                 ("gemini", "provider_reliability", "evaluation", "evaluation_cli_budget", "batch2_evaluation")),
+                 ("gemini", "ollama_adapter", "provider_reliability", "evaluation", "evaluation_cli_budget", "batch2_evaluation")),
 }
 
 
@@ -51,6 +53,8 @@ def run_suite(suite, output):
 
 
 def sample_run(args, output):
+    from agents.planner import PlannerAgent
+    from agents.question_answer import build_question_answer
     from graph import DocumentInput, run_extended_pipeline, run_full_pipeline, run_pipeline, save_outputs
     from rag.market_sources import ingest_market_snapshot
     from rag.retriever import SharedRetriever
@@ -58,12 +62,16 @@ def sample_run(args, output):
 
     if args.scenario in ("corrected", "persistent") and args.workflow != "full":
         raise ValueError("Evidence gap scenarios require the full pipeline.")
-    if args.live and (args.scenario != "clean" or not args.free_tier_confirmed):
-        raise ValueError("Live runs require the annual financial health scenario and free-tier confirmation.")
+    if args.ollama and args.scenario in ("corrected", "persistent"):
+        raise ValueError("Injected evidence gaps require an offline mock model.")
+    if args.live and (args.scenario not in ("clean", "document") or not args.free_tier_confirmed):
+        raise ValueError("Live runs require an analysis or document question and free-tier confirmation.")
     if args.live and not 1 <= args.request_budget <= 12:
         raise ValueError("The live transport attempt budget must be between 1 and 12.")
 
     case = samples()[args.case]
+    if args.scenario == "document" and not (args.question and args.question.strip()):
+        raise ValueError("Enter a question for Ask the document.")
     question = args.question or ("Assess annual financial health, revenue growth, profitability and liquidity"
                                  if args.pdf else case["question"])
     document = dict(case["document"])
@@ -75,6 +83,12 @@ def sample_run(args, output):
     if args.scenario == "unsupported":
         question = "Assess Q2 quarterly financial performance"
     document = None if args.scenario == "missing" else DocumentInput.model_validate(document)
+    planner = PlannerAgent()
+    planning = {"phase1": planner.build_graph, "extended": planner.build_extended_plan, "full": planner.build_full_plan}
+    plan = planning[args.workflow](question, document is not None)
+    document_lookup = args.scenario == "document" or (
+        args.scenario == "clean" and bool(args.question) and plan.status == "unsupported")
+    needs_analysis = document_lookup or plan.status == "ready"
 
     extraction_attempts = 0
 
@@ -87,11 +101,21 @@ def sample_run(args, output):
         return response
 
     mock = Batch2MockLLM(transform=omit_net_income if args.scenario in ("corrected", "persistent") else None)
-    if args.live:
+    local_model = None
+    if args.ollama:
+        from ollama_adapter import OllamaAdapter
+
+        if needs_analysis and check_ollama(output):
+            return 1
+        local_model = document_model = financial_model = OllamaAdapter()
+        logger = logging.getLogger("mafis.ollama")
+        logger.addHandler(logging.StreamHandler())
+        logger.setLevel(logging.INFO)
+    elif args.live:
         from config import DOCUMENT_MODEL, FINANCIAL_MODEL
         from gemini import GeminiAdapter, GeminiSettings, credential
 
-        if not credential():
+        if needs_analysis and not credential():
             raise ValueError("Configure GEMINI_API_KEY or GOOGLE_API_KEY in .env first.")
         budget = [args.request_budget]
         document_model = GeminiAdapter(GeminiSettings.from_env(DOCUMENT_MODEL), allow_live=True, request_budget=budget)
@@ -99,9 +123,13 @@ def sample_run(args, output):
     else:
         document_model = financial_model = mock
 
-    print(f"{WORKFLOWS[args.workflow]} | {SCENARIOS[args.scenario][0]}", flush=True)
-    real_embeddings = args.real_embeddings or args.live
-    print(f"Models: {'live Gemini' if args.live else 'offline mocks'} | Retrieval: {'MiniLM' if real_embeddings else 'test hash embeddings'}", flush=True)
+    label = "Custom question" if args.question and args.scenario == "clean" else SCENARIOS[args.scenario][0]
+    workflow = "Document Q&A" if document_lookup else WORKFLOWS[args.workflow]
+    print(f"{workflow} | {label}", flush=True)
+    real_embeddings = needs_analysis and (args.real_embeddings or args.live or args.ollama)
+    model_mode = local_model.mode if local_model else "Live Gemini" if args.live else "Offline mock"
+    retrieval_mode = ("MiniLM" if real_embeddings else "test hash embeddings") if needs_analysis else "skipped"
+    print(f"Models: {model_mode} | Retrieval: {retrieval_mode}", flush=True)
     if real_embeddings:
         retriever = SharedRetriever(path=output / "index")
     else:
@@ -113,40 +141,53 @@ def sample_run(args, output):
                                     embedder=HashTestEmbedder(), embedding_model="test-hash-v1")
 
     options = dict(retriever=retriever, document_llm=document_model, financial_llm=financial_model)
-    if args.workflow != "phase1":
+    if document_lookup:
+        options["document_lookup"] = True
+    elif args.workflow != "phase1" and needs_analysis:
         market = ingest_market_snapshot(FIXTURES / "market_snapshots/fomc_2024_01_31.json", retriever=retriever)
         options.update(market_filters={"doc_id": market.source.source_id, "kind": "narrative"},
                        risk_categories=("financial", "macro"))
-    if args.workflow == "full":
+    if args.workflow == "full" and not document_lookup:
         options.update(bull_llm=document_model, bear_llm=document_model, critic_llm=document_model)
-    runner = {"phase1": run_pipeline, "extended": run_extended_pipeline, "full": run_full_pipeline}[args.workflow]
+    runner = run_pipeline if document_lookup else {"phase1": run_pipeline, "extended": run_extended_pipeline,
+                                                   "full": run_full_pipeline}[args.workflow]
     state = runner(question, document, **options)
-    save_outputs(state, output, adapters=(document_model, financial_model))
+    answer = build_question_answer(state)
+    save_outputs(state, output, adapters=(document_model, financial_model), question_answer=answer)
 
     memory = state["memory"]
     report_status = state["report"].status
     expected = "partial" if args.scenario in ("persistent", "missing", "unsupported") else "success"
-    if args.scenario == "clean" and (args.pdf or args.question):
+    if document_lookup or args.scenario == "clean" and (args.pdf or args.question):
         expected = None
     checks = {} if expected is None else {f"Report is {expected}": report_status == expected}
     if args.scenario in ("missing", "unsupported"):
-        checks["No model calls"] = not mock.calls
+        checks["No model calls"] = not (local_model.telemetry if local_model else mock.calls)
     if args.scenario in ("corrected", "persistent"):
         checks["One targeted retry"] = extraction_attempts == 2 and memory.retry_budget_remaining == 0
     calls = args.request_budget - budget[0] if args.live else 0
-    if args.live:
+    if args.live and needs_analysis:
         checks["Generation attempted"] = calls > 0
-        checks["Live report succeeded"] = report_status == "success"
+        if not document_lookup:
+            checks["Live report succeeded"] = report_status == "success"
+    if local_model and args.scenario in ("clean", "document") and needs_analysis:
+        checks["Ollama returned structured output"] = any(event.status == "success" for event in local_model.telemetry)
 
     result = {
-        "report_status": report_status, "expected_report_status": expected, "checks": checks,
+        "report_status": report_status, "expected_report_status": expected, "checks": checks, "answer": answer,
         "scenario_passed": all(checks.values()) if checks else None,
-        "model_execution": "Live Gemini" if args.live else "Offline mock",
+        "model_execution": model_mode,
+        "document_lookup": document_lookup,
         "generation_requests": calls, "mock_model_calls": len(mock.calls),
         "retry_nodes": state.get("retry_execution", {}).get("nodes", []),
         "calculations": {c.operation: str(c.display_value) for c in memory.get_calculations()
                          if memory.get_calculation_freshness(c.calculation_ref) == "current"},
     }
+    if local_model:
+        result["ollama"] = {"requests": len(local_model.telemetry),
+                            "original_context_bytes": sum(e.original_context_bytes for e in local_model.telemetry),
+                            "compact_context_bytes": sum(e.compact_context_bytes for e in local_model.telemetry),
+                            "request_bytes": sum(e.request_bytes for e in local_model.telemetry)}
     write_json(output / "scenario.json", result)
     print(json.dumps(result, indent=2))
     return int(result["scenario_passed"] is False)
@@ -166,6 +207,16 @@ def check_key(output):
     return int(not result["models"] or not all(model["available"] for model in result["models"]))
 
 
+def check_ollama(output):
+    from ollama_adapter import probe_ollama, readiness_message
+
+    result = probe_ollama()
+    result["message"] = readiness_message(result)
+    write_json(output / "ollama_readiness.json", result)
+    print(result["message"], flush=True)
+    return int(result["status"] != "ready")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -178,10 +229,13 @@ def main():
     for option in ("pdf", "source-url", "title", "entity", "question"):
         sample.add_argument("--" + option)
     sample.add_argument("--real-embeddings", action="store_true", help="Use MiniLM, which may need a one-time download")
-    sample.add_argument("--live", action="store_true", help="Send source excerpts and prompts to Gemini")
+    model_mode = sample.add_mutually_exclusive_group()
+    model_mode.add_argument("--live", action="store_true", help="Send source excerpts and prompts to Gemini")
+    model_mode.add_argument("--ollama", action="store_true", help="Run DeepSeek-R1 with compact context on local Ollama")
     sample.add_argument("--free-tier-confirmed", action="store_true", help="Confirm this project's model quota in AI Studio")
     sample.add_argument("--request-budget", type=int, default=6, help="Shared live transport attempts, including retries")
     commands.add_parser("key", help="Check access to configured Gemini models using metadata only")
+    commands.add_parser("ollama", help="Check the local Ollama service and installed DeepSeek-R1 model")
     commands.add_parser("retrieval", help="Measure MiniLM retrieval against labeled annual report pages")
     commands.add_parser("evaluation", help="Run the offline full workflow and comparator on development cases")
     commands.add_parser("coverage", help="Record PDF source, extraction and calculation coverage")
@@ -199,6 +253,8 @@ def main():
             return sample_run(args, output)
         if args.command == "key":
             return check_key(output)
+        if args.command == "ollama":
+            return check_ollama(output)
         commands_to_run = {
             "retrieval": ["scripts.evaluate_retrieval", "--output", str(output / "retrieval.json"),
                           "--index", str(output / "index")],

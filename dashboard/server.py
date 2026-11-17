@@ -31,7 +31,9 @@ CHECKS = {
     "coverage": ("Source coverage", "Audit PDF coverage, missing sources and supported calculations across the fixture set."),
 }
 ARTIFACTS = ("report.md", "run_summary.json", "analysis_map.json", "evidence.json", "scenario.json",
-             "gemini_readiness.json", "retrieval.json", "results.json", "manifest.json", "source_coverage.json", "run.log")
+             "gemini_readiness.json", "ollama_readiness.json", "retrieval.json", "results.json", "manifest.json",
+             "source_coverage.json", "run.log")
+RESULTS = ("scenario.json", "run_summary.json", "gemini_readiness.json", "ollama_readiness.json")
 STATIC = {"/": ("index.html", "text/html"), "/styles.css": ("styles.css", "text/css"),
           "/app.js": ("app.js", "text/javascript")}
 
@@ -67,6 +69,8 @@ def build_command(payload, run_dir):
         return [kind, "--group", group], SUITES[group][0], pdf
     if kind == "key":
         return [kind], "Gemini metadata check", pdf
+    if kind == "ollama":
+        return [kind], "Local Ollama check", pdf
     if isinstance(kind, str) and kind in CHECKS:
         return [kind], CHECKS[kind][0], pdf
     if kind != "sample":
@@ -76,12 +80,14 @@ def build_command(payload, run_dir):
     scenario = bounded_text(payload, "scenario", 20)
     mode = bounded_text(payload, "mode", 20)
     available = samples()
-    if workflow not in WORKFLOWS or scenario not in SCENARIOS or mode not in ("mock", "minilm", "live"):
+    if workflow not in WORKFLOWS or scenario not in SCENARIOS or mode not in ("mock", "minilm", "ollama", "live"):
         raise ValueError("Select a workflow, scenario and execution mode.")
     if case != "custom" and case not in available:
         raise ValueError("Select a sample document or upload a PDF.")
     if scenario in ("corrected", "persistent") and workflow != "full":
         raise ValueError("Evidence gap scenarios require the full pipeline.")
+    if mode == "ollama" and scenario in ("corrected", "persistent"):
+        raise ValueError("Injected evidence gaps require an offline mock model.")
     args = [kind, "--workflow", workflow, "--scenario", scenario]
     label = SCENARIOS[scenario][0]
     if case == "custom":
@@ -106,13 +112,19 @@ def build_command(payload, run_dir):
         args.extend(("--case", case))
         entity = available[case]["document"]["entity"]
     question = bounded_text(payload, "question", 1000, required=False)
+    if scenario == "document" and not question:
+        raise ValueError("Enter a question for Ask the document.")
     if question:
         args.append("--question=" + question)
+        if scenario == "clean":
+            label = "Custom question"
     if mode == "minilm":
         args.append("--real-embeddings")
+    if mode == "ollama":
+        args.append("--ollama")
     if mode == "live":
-        if scenario != "clean" or payload.get("free_tier_confirmed") is not True:
-            raise ValueError("Live runs require the annual financial health scenario and free-tier confirmation.")
+        if scenario not in ("clean", "document") or payload.get("free_tier_confirmed") is not True:
+            raise ValueError("Live runs require an analysis or document question and free-tier confirmation.")
         if not key_configured():
             raise ValueError("Configure GEMINI_API_KEY or GOOGLE_API_KEY in .env first.")
         budget = payload.get("request_budget")
@@ -180,8 +192,16 @@ class JobStore:
                 result = json.loads(path.read_text(encoding="utf-8"))
                 if result.get("blocker") == "missing_credential":
                     status = "blocked"
-                if job["kind"] == "sample" and exit_code == 0 and result["scenario_passed"] is None:
-                    status = "completed"
+                if job["kind"] == "sample" and exit_code == 0:
+                    answer_status = result.get("answer", {}).get("status")
+                    custom = result.get("expected_report_status") is None
+                    if custom and answer_status in ("unsupported", "unavailable"):
+                        status = "unanswered"
+                    elif result["scenario_passed"] is None or custom and answer_status == "partial":
+                        status = "completed"
+        readiness = directory / "ollama_readiness.json"
+        if exit_code and readiness.is_file() and json.loads(readiness.read_text(encoding="utf-8"))["status"] != "ready":
+            status = "blocked"
         finished = {**job, "status": status, "exit_code": exit_code, "finished_at": now()}
         with self.lock:
             self.active = None
@@ -203,7 +223,7 @@ class JobStore:
                 log = handle.read(32000).decode("utf-8", errors="replace")
         results = {}
         if job["status"] != "running":
-            for name in ("scenario.json", "run_summary.json", "gemini_readiness.json"):
+            for name in RESULTS:
                 if name in artifacts:
                     results[name] = json.loads((directory / name).read_text(encoding="utf-8"))
         return {**job, "artifacts": artifacts, "log": log, "log_clipped": clipped, "results": results}
@@ -231,6 +251,20 @@ class Handler(BaseHTTPRequestHandler):
     def trusted_host(self):
         port = self.server.server_port
         return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
+
+    def reject_post(self, message, status):
+        # Closing a Windows socket with a small unread body can reset the response.
+        length = self.headers.get("Content-Length", "")
+        if len(length) <= 4 and length.isascii() and length.isdecimal() and int(length) <= 4096:
+            timeout = self.connection.gettimeout()
+            self.connection.settimeout(0.5)
+            try:
+                self.rfile.read(int(length))
+            except OSError:
+                pass
+            finally:
+                self.connection.settimeout(timeout)
+        return self.send_json({"error": message}, status)
 
     def do_GET(self):
         if not self.trusted_host():
@@ -265,11 +299,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         host = self.headers.get("Host")
         if not self.trusted_host() or self.headers.get("Origin", f"http://{host}") != f"http://{host}":
-            return self.send_json({"error": "Requests must come from the local dashboard."}, HTTPStatus.FORBIDDEN)
+            return self.reject_post("Requests must come from the local dashboard.", HTTPStatus.FORBIDDEN)
         if self.path != "/api/runs":
-            return self.send_json({"error": "Unknown endpoint."}, HTTPStatus.NOT_FOUND)
+            return self.reject_post("Unknown endpoint.", HTTPStatus.NOT_FOUND)
         if self.headers.get_content_type() != "application/json":
-            return self.send_json({"error": "Expected a JSON request."}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
+            return self.reject_post("Expected a JSON request.", HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if size <= 0:

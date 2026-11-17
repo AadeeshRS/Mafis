@@ -62,7 +62,7 @@ a.status-card:hover { border-color: #8ebbad; }
 .tag { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 3px 8px; border-radius: 20px; font-size: 11px; line-height: 1.3; font-weight: 650; white-space: nowrap; }
 .green, .tag.passed { color: #135841; background: #e3f2e9; }
 .tag.failed { color: #8b2c2c; background: #f9e6e6; }
-.tag.blocked, .tag.interrupted { color: #80501b; background: #fff1db; }
+.tag.blocked, .tag.interrupted, .tag.unanswered { color: #80501b; background: #fff1db; }
 .tag.running { color: #205780; background: #e4f0fa; }
 .tag.neutral, .tag.completed { color: #43545b; background: #edf2f1; }
 .notice { padding: 11px 14px; border: 1px solid #ecbdb7; border-radius: 8px; margin-bottom: 16px; background: #fff1ed; color: #88331e; font-size: 14px; }
@@ -99,6 +99,11 @@ a.status-card:hover { border-color: #8ebbad; }
 .run-details ul { margin: 0; padding-left: 20px; }
 .run-details summary { color: var(--accent); cursor: pointer; }
 .run-details details ul { margin-top: 5px; color: var(--muted); }
+.question-answer { display: grid; gap: 7px; margin-bottom: 6px; padding: 12px; border: 1px solid #d6e7e0; border-radius: 9px; background: #f3f8f5; }
+.submitted-question { color: var(--muted); }
+.question-answer .answer-items { display: grid; gap: 7px; padding: 0; list-style: none; }
+.answer-items li + li { padding-top: 7px; border-top: 1px solid #d6e7e0; }
+.answer-evidence { margin-top: 2px; color: var(--muted); font-size: 12px; }
 .artifacts { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 15px 0; }
 .artifacts a { font-size: 12px; background: #eef5f3; border-radius: 7px; padding: 6px 8px; text-decoration: none; }
 .artifacts a:hover { background: #e0eee9; }
@@ -114,6 +119,7 @@ h3 { font-size: 15px; font-weight: 700; }
 .test-card .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 .test-card .button { min-height: 32px; padding: 5px 9px; font-size: 12px; }
 .provider-panel { display: flex; gap: 14px; justify-content: space-between; align-items: center; padding: 16px; }
+.provider-panel + .provider-panel { margin-top: 10px; }
 .provider-panel p { margin-top: 6px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 code { font: .92em "IBM Plex Mono", Consolas, monospace; background: #edf2f1; border-radius: 4px; padding: 2px 4px; color: var(--ink); }
 .history { overflow: hidden; }

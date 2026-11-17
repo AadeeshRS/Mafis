@@ -47,12 +47,12 @@ class Phase1State(TypedDict, total=False):
     report: FinancialReport
     issues: tuple[AgentIssue, ...]
     stage_timings_ms: dict[str, float]
+    verification_records: tuple[VerificationRecord, ...]
 
 
 class ExtendedState(Phase1State, total=False):
     market_result: MarketResult
     risk_result: RiskResult
-    verification_records: tuple[VerificationRecord, ...]
     health_gate: GateResult
     reanalysis_request: dict[str, Any] | None
     bull_result: Any
@@ -62,7 +62,7 @@ class ExtendedState(Phase1State, total=False):
     retry_execution: Any
 
 
-def build_graph(*, retriever=None, document_llm=None, financial_llm=None):
+def build_graph(*, retriever=None, document_llm=None, financial_llm=None, document_lookup=False):
     """Compile the sequential Phase 1 flow; claims never live in graph copies."""
     retriever = retriever if retriever is not None else get_shared_retriever()
     document_llm = document_llm if document_llm is not None else GeminiAdapter()
@@ -78,7 +78,9 @@ def build_graph(*, retriever=None, document_llm=None, financial_llm=None):
         except (ValueError, TypeError):
             document = None
             input_issues = (AgentIssue(code="invalid_document_input", message="Document metadata needs a path, HTTP source URL, title, and entity"),)
-        plan = PlannerAgent().build_graph(state.get("question", ""), document is not None)
+        planner_agent = PlannerAgent()
+        plan_fn = planner_agent.build_document_plan if document_lookup else planner_agent.build_graph
+        plan = plan_fn(state.get("question", ""), document is not None)
         return {"memory": memory, "document": document, "plan": plan,
                 "issues": state.get("issues", ()) + input_issues + plan.issues}
 
@@ -88,15 +90,26 @@ def build_graph(*, retriever=None, document_llm=None, financial_llm=None):
             result = ingest_document(doc.path, source_url=str(doc.source_url), title=doc.title,
                                      entity=doc.entity, retriever=retriever)
             state["memory"].register_source(result.source)
-            return {"source_id": result.source.source_id, "issues": state["issues"] + tuple(
-                AgentIssue(code="ingestion_limitation", message=text) for text in result.limitations)}
+            issues = () if document_lookup else tuple(AgentIssue(code="ingestion_limitation", message=text)
+                                                      for text in result.limitations)
+            return {"source_id": result.source.source_id, "issues": state["issues"] + issues}
         except (OSError, ValueError, RetrievalUnavailable) as exc:
             return {"issues": state["issues"] + (AgentIssue(code="ingestion_failed", message=str(exc)),)}
 
     def document(state):
         result = DocumentAgent(state["memory"], retriever, document_llm, source_id=state["source_id"]).extract_primitives(
-            state["question"], metrics=state["plan"].metrics)
+            state["question"], metrics=state["plan"].metrics, document_lookup=document_lookup)
         return {"document_result": result, "issues": state["issues"] + result.issues}
+
+    def verify_document(state):
+        from agents.verification_agent import VerificationAgent
+
+        memory = state["memory"]
+        refs = state["document_result"].claim_refs
+        records = VerificationAgent(memory, retriever).verify_all([ref.claim_id for ref in refs])
+        return {"document_result": state["document_result"].model_copy(
+            update={"claim_refs": tuple(memory.reference(ref.claim_id) for ref in refs)}),
+            "verification_records": tuple(records)}
 
     def financial(state):
         result = FinancialAgent(state["memory"], financial_llm).analyze(state["question"],
@@ -110,11 +123,13 @@ def build_graph(*, retriever=None, document_llm=None, financial_llm=None):
         mode = (f"Document model: {getattr(document_llm, 'mode', 'injected mock')}; "
                 f"Financial model: {getattr(financial_llm, 'mode', 'injected mock')}; "
                 f"embeddings: {retriever.embedding_model}")
-        result = ReportAgent(state["memory"], retriever).build_analysis_map(state["issues"], execution_mode=mode)
+        if document_lookup:
+            mode = f"Document Q&A; model: {getattr(document_llm, 'mode', 'injected mock')}; embeddings: {retriever.embedding_model}"
+        result = ReportAgent(state["memory"], retriever, document_lookup=document_lookup).build_analysis_map(state["issues"], execution_mode=mode)
         return {"analysis_map": result}
 
     def report(state):
-        return {"report": ReportAgent(state["memory"], retriever).generate_report(state["analysis_map"])}
+        return {"report": ReportAgent(state["memory"], retriever, document_lookup=document_lookup).generate_report(state["analysis_map"])}
 
     def timed(name, function):
         def invoke(state):
@@ -131,8 +146,13 @@ def build_graph(*, retriever=None, document_llm=None, financial_llm=None):
     builder.add_edge(START, "planner")
     builder.add_conditional_edges("planner", lambda s: "ingest" if s["plan"].status == "ready" else "analysis_map")
     builder.add_conditional_edges("ingest", lambda s: "document_agent" if s.get("source_id") else "analysis_map")
-    builder.add_conditional_edges("document_agent", lambda s: "financial_agent" if s["plan"].operations
-                                 and s["document_result"].claim_refs else "analysis_map")
+    if document_lookup:
+        builder.add_node("verify_document", timed("verify_document", verify_document))
+        builder.add_edge("document_agent", "verify_document")
+        builder.add_edge("verify_document", "analysis_map")
+    else:
+        builder.add_conditional_edges("document_agent", lambda s: "financial_agent" if s["plan"].operations
+                                     and s["document_result"].claim_refs else "analysis_map")
     builder.add_edge("financial_agent", "analysis_map")
     builder.add_edge("analysis_map", "report")
     builder.add_edge("report", END)
@@ -140,12 +160,13 @@ def build_graph(*, retriever=None, document_llm=None, financial_llm=None):
 
 
 def run_pipeline(question: str, document: DocumentInput | dict | None = None, *, retriever=None,
-                 document_llm=None, financial_llm=None, memory: SharedMemory | None = None) -> Phase1State:
+                 document_llm=None, financial_llm=None, memory: SharedMemory | None = None,
+                 document_lookup=False) -> Phase1State:
     """A fresh per-run store plus one shared source index; no checkpoint database."""
     memory = memory if memory is not None else SharedMemory()
     if memory.get_claims() or memory.get_calculations():
         raise ValueError("Start a pipeline invocation with an empty run store")
-    app = build_graph(retriever=retriever, document_llm=document_llm, financial_llm=financial_llm)
+    app = build_graph(retriever=retriever, document_llm=document_llm, financial_llm=financial_llm, document_lookup=document_lookup)
     return app.invoke({"question": question, "document": document, "memory": memory, "issues": ()})
 
 
@@ -330,10 +351,16 @@ def run_extended_pipeline(question: str, document: DocumentInput | dict | None =
     return app.invoke({"question": question, "document": document, "memory": memory, "issues": ()})
 
 
-def save_outputs(state: Phase1State, directory: str | Path, *, adapters=()) -> None:
+def save_outputs(state: Phase1State, directory: str | Path, *, adapters=(), question_answer=None) -> None:
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "report.md").write_text(state["report"].markdown, encoding="utf-8")
+    report = state["report"].markdown
+    if question_answer is not None:
+        from agents.question_answer import render_question_answer
+
+        title, _, body = report.partition("\n")
+        report = title + "\n\n" + render_question_answer(question_answer) + body.lstrip("\n")
+    (directory / "report.md").write_text(report, encoding="utf-8")
     (directory / "analysis_map.json").write_text(state["analysis_map"].model_dump_json(indent=2), encoding="utf-8")
     claims = state["memory"].get_claims(min_version_only=False)
     source_ids = {e.source_id for c in claims for e in c.evidence}
@@ -341,7 +368,7 @@ def save_outputs(state: Phase1State, directory: str | Path, *, adapters=()) -> N
         "sources": [state["memory"].get_source(s).model_dump(mode="json") for s in sorted(source_ids)],
         "claims": [c.model_dump(mode="json") for c in claims],
         "calculations": [c.model_dump(mode="json") for c in state["memory"].get_calculations()]}
-    if "health_gate" in state:
+    if "verification_records" in state:
         evidence_export["verification_records"] = [r.model_dump(mode="json") for r in state["memory"].get_verification_records()]
     if "critic_result" in state or "retry_decision" in state:
         evidence_export["contradictions"] = [r.model_dump(mode="json") for r in state["memory"].get_contradictions(history=True)]
@@ -360,6 +387,8 @@ def save_outputs(state: Phase1State, directory: str | Path, *, adapters=()) -> N
     if "health_gate" in state:
         summary["health_gate"] = state["health_gate"].model_dump(mode="json")
         summary["reanalysis_request"] = state.get("reanalysis_request")
+    if question_answer is not None:
+        summary["answer"] = question_answer
     (directory / "run_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 
@@ -368,7 +397,9 @@ def main():
     for name in ("pdf", "source-url", "title", "entity", "question"):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--output", default="output/phase1")
-    parser.add_argument("--live", action="store_true", help="Explicitly enable API requests; account billing/quota must be checked by the caller")
+    model_mode = parser.add_mutually_exclusive_group()
+    model_mode.add_argument("--live", action="store_true", help="Explicitly enable API requests; account billing/quota must be checked by the caller")
+    model_mode.add_argument("--ollama", action="store_true", help="Run the local DeepSeek-R1 adapter with compact evidence")
     parser.add_argument("--extended", action="store_true", help="Opt into Batch 1 independent verification, dated Market, Risk and Health Gate")
     parser.add_argument("--full", action="store_true", help="Opt into Bull/Bear/Critic and the single targeted retry")
     parser.add_argument("--free-tier-confirmed",action="store_true",help="Caller attestation required for full live flow")
@@ -385,16 +416,25 @@ def main():
         parser.error("Full live flow requires free-tier attestation and a shared 1-12 attempt budget")
     if not (args.extended or args.full) and (args.market_snapshot or args.risk_category or args.as_of):
         parser.error("--market-snapshot, --risk-category and --as-of require --extended")
-    document_adapter = GeminiAdapter(GeminiSettings.from_env(DOCUMENT_MODEL), allow_live=args.live)
-    financial_adapter = GeminiAdapter(GeminiSettings.from_env(FINANCIAL_MODEL), allow_live=args.live)
-    if args.full:
-        budget=[args.request_budget]
-        document_adapter.request_budget=financial_adapter.request_budget=budget
+    budget = [args.request_budget] if args.full else None
+    if args.ollama:
+        from ollama_adapter import OllamaAdapter, probe_ollama, readiness_message
+
+        try:
+            readiness = probe_ollama()
+            if readiness["status"] != "ready":
+                parser.error(readiness_message(readiness))
+            document_adapter = financial_adapter = OllamaAdapter()
+        except ValueError as exc:
+            parser.error(str(exc))
+    else:
+        document_adapter = GeminiAdapter(GeminiSettings.from_env(DOCUMENT_MODEL), allow_live=args.live, request_budget=budget)
+        financial_adapter = GeminiAdapter(GeminiSettings.from_env(FINANCIAL_MODEL), allow_live=args.live, request_budget=budget)
     runner = run_full_pipeline if args.full else run_extended_pipeline if args.extended else run_pipeline
     options = {"as_of": args.as_of, "health_threshold": args.health_threshold,
                "risk_categories": tuple(args.risk_category) if args.risk_category else None} if args.extended or args.full else {}
     if args.full:
-        options.update({key:GeminiAdapter(document_adapter.settings,allow_live=args.live,request_budget=budget)
+        options.update({key:document_adapter if args.ollama else GeminiAdapter(document_adapter.settings,allow_live=args.live,request_budget=budget)
                         for key in ("bull_llm","bear_llm","critic_llm")})
     if args.market_snapshot:
         from rag.market_sources import ingest_market_snapshot
@@ -404,9 +444,12 @@ def main():
     state = runner(args.question, DocumentInput(path=args.pdf, source_url=args.source_url, title=args.title, entity=args.entity),
         document_llm=document_adapter, financial_llm=financial_adapter, **options)
     adapters = (document_adapter, financial_adapter) + tuple(options[k] for k in ("bull_llm", "bear_llm", "critic_llm") if k in options)
-    save_outputs(state, args.output, adapters=adapters)
+    from agents.question_answer import build_question_answer
+
+    answer = build_question_answer(state)
+    save_outputs(state, args.output, adapters=adapters, question_answer=answer)
     print(json.dumps({"status": state["report"].status, "output": str(Path(args.output).resolve()),
-                      "execution_mode": state["analysis_map"].execution_mode}))
+                      "execution_mode": state["analysis_map"].execution_mode, "answer": answer}))
 
 
 def verification_health_gate(state: dict[str, Any]) -> str:

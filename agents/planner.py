@@ -9,10 +9,20 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from agents.contracts import AgentIssue
+from agents.contracts import AgentIssue, MARKET_SHARE
 from engine.financial_engine import FinancialEngine
 from memory.shared_memory import CalculationOperation, EvidenceModel, ReanalysisRequest, RetryDecision
 from uuid import uuid4
+
+
+SOURCE_FACTS = (
+    ("revenue", r"\brevenue\b(?!\s+growth\b)"),
+    ("operating_income", r"\boperating income\b"),
+    ("net_income", r"\bnet income\b"),
+    ("current_assets", r"\bcurrent assets\b"),
+    ("current_liabilities", r"\bcurrent liabilities\b"),
+)
+OVERVIEW_QUERY = r"company overview|business overview|headquarter|incorporat"
 
 
 class PlanTask(EvidenceModel):
@@ -25,6 +35,9 @@ class Phase1Plan(EvidenceModel):
     query: str
     operations: tuple[CalculationOperation, ...] = ()
     metrics: tuple[str, ...] = ()
+    requested_facts: tuple[str, ...] = ()
+    overview: bool = False
+    document_lookup: bool = False
     target_year: int | None = None
     tasks: tuple[PlanTask, ...] = ()
     issues: tuple[AgentIssue, ...] = ()
@@ -33,15 +46,28 @@ class Phase1Plan(EvidenceModel):
 class PlannerAgent:
     """Plans task graph and scoped re-analysis within the retry budget."""
 
+    def build_document_plan(self, query, has_documents):
+        if not isinstance(query, str) or not query.strip() or not has_documents:
+            return self.build_graph(query, has_documents)
+        return Phase1Plan(status="ready", query=query, document_lookup=True, tasks=(
+            PlanTask(name="ingest"), PlanTask(name="document", depends_on=("ingest",)),
+            PlanTask(name="verify_document", depends_on=("document",)),
+            PlanTask(name="analysis_map", depends_on=("verify_document",)),
+            PlanTask(name="report", depends_on=("analysis_map",)),
+        ))
+
     def build_full_plan(self, query, has_documents):
         if not isinstance(query, str):
             return self.build_extended_plan(query, has_documents)
         # Full mode explicitly supports these tasks; do not preserve a false
         # unsupported-scope warning from the legacy query router.
         analysis_query = re.sub(r"\b(bull|bear|critic|adversarial|opposing)\b", "", query, flags=re.I)
-        if not re.search(r"financial|revenue|margin|liquidity|overview|market analysis|risk assessment", analysis_query, re.I):
-            analysis_query += " financial health"
         base = self.build_extended_plan(analysis_query, has_documents)
+        if (analysis_query != query and base.status == "unsupported"
+                and base.issues[0].code in ("empty_question", "unsupported_question")):
+            base = self.build_extended_plan(analysis_query + " financial health", has_documents)
+        if base.status != "ready":
+            return base.model_copy(update={"query": query})
         tasks = base.tasks[:-2] + (
             PlanTask(name="bull", depends_on=("health_gate",)),
             PlanTask(name="bear", depends_on=("health_gate",)),
@@ -164,12 +190,16 @@ class PlannerAgent:
             return Phase1Plan(status="missing_document", query=query,
                 issues=(AgentIssue(code="missing_document", message="Provide a born-digital annual report and its identity"),))
         text = query.casefold()
+        if MARKET_SHARE.search(text):
+            return Phase1Plan(status="unsupported", query=query, issues=(AgentIssue(
+                code="unsupported_market_share",
+                message="This run cannot determine market share. It needs a reported share or company and total-market data measured on the same basis, for the same region and period."),))
         if re.search(r"\bquarter\w*\b|\bq[1-4]\b|\bttm\b|trailing|calendar.year|monthly", text):
             return Phase1Plan(status="unsupported", query=query,
                 issues=(AgentIssue(code="unsupported_period", message="This extraction profile supports reported fiscal annual periods, not quarterly, monthly, calendar-year, or trailing periods"),))
         operations = []
         for operation, pattern in (
-            ("revenue_growth", r"growth|compar\w*.*revenue|revenue.*compar"),
+            ("revenue_growth", r"\brevenue\s+growth\b|\bgrowth\s+(?:in|of)\s+revenue\b|compar\w*.*revenue|revenue.*compar"),
             ("operating_margin", r"operating.*margin|profitability|profit margins?"),
             ("net_margin", r"net.*margin|profitability|profit margins?"),
             ("current_ratio", r"current ratio|liquidity|short.term"),
@@ -177,17 +207,14 @@ class PlannerAgent:
             if re.search(pattern, text):
                 operations.append(operation)
         unsupported = bool(re.search(r"\bdcf\b|forecast|valuation|buy|sell|hold recommendation|bull|bear|critic|market analysis|risk assessment", text))
-        general = bool(re.search(r"financial (?:health|analysis|performance)|annual results", text))
-        if general or (not operations and not unsupported and re.search(r"analy[sz]|assess|review", text)):
+        general = (re.search(r"financial (?:health|analysis|performance)|annual results", text)
+                   or re.fullmatch(r"(?:analy[sz]e|assess|review)\s+(?:(?:the|this)\s+)?(?:company|annual report|report|filing)[.!?]?", text.strip()))
+        if general:
             operations = ["revenue_growth", "operating_margin", "net_margin", "current_ratio"]
-        metrics = list(dict.fromkeys(name for op in operations for _, name in FinancialEngine.operation_inputs(op)))
-        if not operations:
-            for name, pattern in (("revenue", r"revenue"), ("operating_income", r"operating income"),
-                                  ("net_income", r"net income"), ("current_assets", r"current assets"),
-                                  ("current_liabilities", r"current liabilities")):
-                if re.search(pattern, text):
-                    metrics.append(name)
-        overview = bool(re.search(r"company overview|business overview|headquarter|incorporat", text))
+        requested_facts = tuple(name for name, pattern in SOURCE_FACTS if re.search(pattern, text))
+        inputs = tuple(name for op in operations for _, name in FinancialEngine.operation_inputs(op))
+        metrics = tuple(dict.fromkeys(inputs + requested_facts))
+        overview = bool(re.search(OVERVIEW_QUERY, text))
         if not operations and not metrics and not overview:
             return Phase1Plan(status="unsupported", query=query,
                 issues=(AgentIssue(code="unsupported_question", message="Supported scope is source facts, annual revenue growth, margins, and current ratio"),))
@@ -196,7 +223,8 @@ class PlannerAgent:
                  PlanTask(name="financial", depends_on=("document",)),
                  PlanTask(name="analysis_map", depends_on=("document", "financial")),
                  PlanTask(name="report", depends_on=("analysis_map",)))
-        return Phase1Plan(status="ready", query=query, operations=tuple(operations), metrics=tuple(metrics),
+        return Phase1Plan(status="ready", query=query, operations=tuple(operations), metrics=metrics,
+            requested_facts=requested_facts, overview=overview,
             target_year=max(years) if years else None, tasks=tasks,
             issues=(AgentIssue(code="unsupported_scope_omitted", message="Out-of-scope analysis or recommendations were omitted"),) if unsupported else ())
 

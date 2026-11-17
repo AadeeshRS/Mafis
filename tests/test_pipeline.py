@@ -2,9 +2,12 @@ from decimal import Decimal
 import json
 from pathlib import Path
 import shutil
+from types import SimpleNamespace
 
 import pytest
 
+from agents.planner import PlannerAgent
+from agents.question_answer import build_question_answer
 from agents.report_agent import ReportAgent
 from gemini import GeminiAdapter, GeminiSettings
 from graph import DocumentInput, build_graph, run_pipeline, save_outputs
@@ -65,6 +68,50 @@ def test_outputs_are_reviewable_and_keep_exact_artifacts(end_to_end):
     summary = json.loads((root / "outputs/run_summary.json").read_text())
     assert "mocked" in summary["execution_mode"] and summary["report_status"] == "success"
     assert all(t["total_tokens"] is None for t in summary["model_telemetry"])
+
+
+def test_saved_answer_uses_only_requested_metric_and_fiscal_period(end_to_end, tmp_path):
+    state, _, _, adapters, _ = end_to_end
+    question = "What was FY2023 revenue?"
+    scoped = {**state, "question": question, "plan": PlannerAgent().build_graph(question, True)}
+    answer = build_question_answer(scoped)
+    item, = answer["items"]
+    assert answer["question"] == question and answer["status"] == "answered"
+    assert item["label"] == "Revenue" and item["period"] == "Fiscal year ended 2023-01-29"
+    assert item["value"].startswith("USD ") and item["sources"]
+    save_outputs(scoped, tmp_path, adapters=adapters, question_answer=answer)
+    report_answer = (tmp_path / "report.md").read_text(encoding="utf-8").split("## Executive Summary")[0]
+    assert question in report_answer and item["value"] in report_answer
+    assert "Operating margin" not in report_answer
+
+
+@pytest.mark.parametrize("selected", ["direct", "related", "unknown", "empty"])
+def test_document_lookup_checks_exact_excerpts(end_to_end, selected, monkeypatch):
+    state, index, _, _, _ = end_to_end
+    source = state["memory"].get_source(state["source_id"])
+    monkeypatch.setattr("graph.ingest_document", lambda *args, **kwargs: SimpleNamespace(source=source))
+
+    def select(response, payload):
+        assert payload["task"] == "document_lookup"
+        if selected != "empty":
+            response["passage_ids"] = [9999 if selected == "unknown" else payload["passages"][0][0]]
+            response["coverage"] = "related" if selected == "related" else "direct"
+        return response
+
+    model = GroundedMockLLM(transform=select)
+    result = run_pipeline("What does the report say about supply constraints?", state["document"],
+                          retriever=index, document_llm=model, document_lookup=True)
+    answer = build_question_answer(result)
+    assert len(model.calls) == 1 and not result["memory"].get_calculations()
+    if selected == "direct":
+        assert answer["status"] == "answered" and result["report"].status == "success"
+        assert answer["items"][0]["verification"] == "verified" and answer["items"][0]["sources"]
+    elif selected == "related":
+        assert answer["status"] == "partial" and result["report"].status == "partial"
+        assert answer["items"][0]["verification"] == "verified"
+    else:
+        assert answer["status"] == "unavailable" and result["report"].status == "partial"
+        assert not answer["items"]
 
 
 def test_missing_document_returns_partial_without_model_calls(offline_retriever):

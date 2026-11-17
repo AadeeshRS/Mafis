@@ -18,7 +18,7 @@
       <a href="#overview" aria-current="location"><span class="nav-icon grid-icon" aria-hidden="true">▦</span> Overview</a>
       <a href="#suites"><span class="nav-icon" aria-hidden="true">›_</span> Test suites</a>
       <a href="#samples"><span class="nav-icon" aria-hidden="true">▤</span> Sample library</a>
-      <a href="#gemini"><span class="nav-icon" aria-hidden="true">⌁</span> Gemini setup</a>
+      <a href="#gemini"><span class="nav-icon" aria-hidden="true">⌁</span> Model setup</a>
       <a href="#history"><span class="nav-icon" aria-hidden="true">◷</span> Run history</a>
     </nav>
     <div class="sidebar-footer"><span class="dot"></span> Local workspace</div>
@@ -59,12 +59,15 @@
               <label class="field">Use case <select id="scenario" required></select></label>
             </div>
             <p class="field-help" id="scenario-hint"></p>
-            <label class="field">Question <textarea id="question" rows="2" maxlength="1000"></textarea></label>
+            <label class="field">Question <textarea id="question" rows="2" maxlength="1000" aria-describedby="question-help"></textarea>
+              <small id="question-help">Ask about the filing or a supported financial calculation. Leave blank to use the sample question.</small></label>
             <label class="field">Execution mode <select id="mode">
               <option value="mock">Offline mock · test embeddings</option>
               <option value="minilm">Offline mock · MiniLM retrieval</option>
+              <option value="ollama">Local Ollama · DeepSeek-R1</option>
               <option value="live">Live Gemini · MiniLM retrieval</option>
             </select></label>
+            <p id="ollama-fields" class="field-help" hidden>Runs DeepSeek-R1 and MiniLM on this machine. Each model request uses compact evidence. No API key required.</p>
             <div id="live-fields" class="live-fields" hidden>
               <p>Live Gemini sends the question and retrieved excerpts to Google. MiniLM can require a one-time download.</p>
               <label class="confirmation"><input type="checkbox" id="confirm-free"> I checked my project’s free-tier quota for the configured models in AI Studio.</label>
@@ -99,7 +102,13 @@
       </section>
 
       <section id="gemini" class="section" aria-labelledby="gemini-title">
-        <div class="section-head"><div><h2 id="gemini-title">Gemini setup</h2><p>Check access to the models configured for MAFIS.</p></div></div>
+        <div class="section-head"><div><h2 id="gemini-title">Model setup</h2><p>Check the local Ollama service or the configured Gemini models.</p></div></div>
+        <div class="panel provider-panel">
+          <div><h3>Local Ollama · DeepSeek-R1</h3>
+            <p>Start Ollama and install the default model with <code>ollama pull deepseek-r1:8b</code>. The access check looks for the installed model without generating content.</p>
+          </div>
+          <button class="button secondary" type="button" data-check="ollama">Check Ollama access</button>
+        </div>
         <div class="panel provider-panel">
           <div><h3 id="key-heading">Checking for a credential…</h3>
             <p>Set <code>GEMINI_API_KEY</code> or <code>GOOGLE_API_KEY</code> in the repository’s <code>.env</code>. The check makes model metadata requests and uses zero generation tokens.</p>

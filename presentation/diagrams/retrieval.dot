@@ -1,0 +1,24 @@
+digraph Retrieval {
+  graph [rankdir=LR, bgcolor=transparent, pad=.18, ranksep=.42, fontname="Arial"];
+  node [shape=box, style="rounded,filled", fillcolor="#F8DDC9", color="#823711",
+        fontcolor="#013230", fontname="Arial", margin=".18,.10"];
+  edge [color="#465C54", fontname="Arial", fontcolor="#465C54", arrowsize=.7];
+  pdf [label="Born-digital PDF", fillcolor="#FFF9EE"];
+  text [label="Page-bounded narrative\n900 / 150; section 800 / 100"];
+  parsed [label="Statement row + fiscal headers\nTyped cells and source location"];
+  index [label="Chroma cosine index", fillcolor="#DEE7D9", color="#19574D"];
+  query [label="Scoped query", fillcolor="#FFF9EE"];
+  mini [label="MiniLM chunk embeddings"];
+  qvec [label="MiniLM query embedding"];
+  lookup [label="Cosine search\nMetadata filters"];
+  hits [label="Ranked chunks\nNarrative top 3; metric top 5"];
+  pdf -> text;
+  pdf -> parsed;
+  text -> mini;
+  parsed -> mini;
+  query -> qvec;
+  mini -> index;
+  qvec -> lookup;
+  index -> lookup;
+  lookup -> hits;
+}

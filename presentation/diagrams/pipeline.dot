@@ -1,0 +1,36 @@
+digraph MAFIS {
+  graph [rankdir=TB, bgcolor=transparent, pad=.18, nodesep=.35, ranksep=.44,
+         fontname="Arial", splines=polyline];
+  node [shape=box, style="rounded,filled", fillcolor="#F8DDC9", color="#823711",
+        fontcolor="#013230", fontname="Arial", margin=".18,.10"];
+  edge [color="#465C54", fontname="Arial", fontcolor="#465C54", arrowsize=.7];
+
+  input [label="Question + filing", fillcolor="#FFF9EE"];
+  planner [label="PlannerAgent"];
+  ingest [label="Ingest and index filing"];
+  doc [label="DocumentAgent"];
+  primitive [label="Verify source claims", fillcolor="#DEE7D9", color="#19574D"];
+  financial [label="FinancialAgent + FinancialEngine"];
+  market [label="MarketAgent: dated snapshot"];
+  findings [label="Verify findings", fillcolor="#DEE7D9", color="#19574D"];
+  risk [label="RiskAgent"];
+  risk_check [label="Verify risk", fillcolor="#DEE7D9", color="#19574D"];
+  gate [label="Health Gate", fillcolor="#DEE7D9", color="#19574D"];
+  stances [label="Bull + Bear"];
+  critic [label="Mechanical Critic"];
+  decision [label="Planner retry check", fillcolor="#DEE7D9", color="#19574D"];
+  rerun [label="Rerun affected dependencies\nand refresh checks"];
+  report [label="AnalysisMap + ReportAgent", fillcolor="#013230", fontcolor="#FFF9EE"];
+
+  input -> planner -> ingest -> doc -> primitive -> financial -> market -> findings;
+  planner -> gate [label="Plan blocked"];
+  ingest -> gate [label="No source ID"];
+  primitive -> market [label="No operation requested"];
+  findings -> risk -> risk_check -> gate;
+  gate -> stances [label="Pass"];
+  stances -> critic -> decision;
+  gate -> decision [label="Blocked"];
+  decision -> rerun [label="Retry allocated (max 1)"];
+  decision -> report [label="No rerun"];
+  rerun -> report;
+}

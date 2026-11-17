@@ -1,12 +1,12 @@
 const $ = (id) => document.getElementById(id);
 const statuses = {
   passed: "Passed", failed: "Failed", running: "Running", blocked: "Blocked",
-  completed: "Completed", interrupted: "Interrupted",
+  completed: "Completed", interrupted: "Interrupted", unanswered: "Unanswered",
 };
 const artifactNames = {
-  "report.md": "Report", "run_summary.json": "Run summary", "analysis_map.json": "Analysis map",
+  "report.md": "Download report (.md)", "run_summary.json": "Run summary", "analysis_map.json": "Analysis map",
   "evidence.json": "Evidence & calculations", "scenario.json": "Scenario checks",
-  "gemini_readiness.json": "Gemini diagnostics", "retrieval.json": "Retrieval scores",
+  "gemini_readiness.json": "Gemini diagnostics", "ollama_readiness.json": "Ollama diagnostics", "retrieval.json": "Retrieval scores",
   "results.json": "Evaluation results", "manifest.json": "Evaluation manifest",
   "source_coverage.json": "Source coverage", "run.log": "Full log",
 };
@@ -67,25 +67,36 @@ function updateForm() {
   const custom = $("case").value === "custom";
   const workflow = $("workflow").value;
   const live = $("mode").value === "live";
+  const ollama = $("mode").value === "ollama";
   const scenario = $("scenario");
   for (const choice of scenario.options) {
-    choice.disabled = (live && choice.value !== "clean") ||
-      (workflow !== "full" && ["corrected", "persistent"].includes(choice.value)) ||
-      (custom && choice.value !== "clean");
+    const analysis = ["clean", "document"].includes(choice.value);
+    choice.disabled = (live && !analysis) ||
+      ((workflow !== "full" || ollama) && ["corrected", "persistent"].includes(choice.value)) ||
+      (custom && !analysis);
   }
   if (scenario.selectedOptions[0]?.disabled) scenario.value = "clean";
-  $("scenario-hint").textContent = catalog.scenarios[scenario.value][1];
+  const lookup = scenario.value === "document";
+  const mock = ["mock", "minilm"].includes($("mode").value);
+  $("scenario-hint").textContent = catalog.scenarios[scenario.value][1] +
+    (lookup && mock ? " Mock execution simulates an empty answer." : "");
+  $("workflow").disabled = lookup;
   const item = catalog.samples.find((sample) => sample.id === $("case").value);
   const fixedQuestion = scenario.value === "unsupported";
   $("question").disabled = fixedQuestion;
+  $("question").required = lookup;
   $("question").placeholder = fixedQuestion ? "Assess Q2 quarterly financial performance" :
-    item?.question || "Assess annual financial health, revenue growth, profitability and liquidity";
+    lookup ? "What does the report say about its suppliers?" :
+      item?.question || "Assess annual financial health, revenue growth, profitability and liquidity";
+  $("question-help").textContent = lookup ? "Enter a question about the selected PDF." :
+    "Ask about the filing or a supported financial calculation. Leave blank to use the sample question.";
   $("custom-fields").hidden = !custom;
   for (const input of $("custom-fields").querySelectorAll("input")) {
     input.required = custom;
     input.disabled = !custom;
   }
   $("live-fields").hidden = !live;
+  $("ollama-fields").hidden = !ollama;
   $("confirm-free").required = live;
   $("budget").required = live;
   $("budget").disabled = !live;
@@ -145,21 +156,63 @@ function appendList(target, entries) {
   target.append(list);
 }
 
+function renderAnswer(answer) {
+  const section = element("section", undefined, "question-answer");
+  section.append(element("h3", "Answer to your question"));
+  if (!answer) {
+    section.append(element("p", "Run this question again to see an answer and its evidence here."));
+    return section;
+  }
+  section.append(element("p", answer.question, "submitted-question"));
+  if (answer.message) section.append(element("p", answer.message));
+  if (answer.items.length) {
+    const list = element("ul", undefined, "answer-items");
+    for (const { label, value, period, entity, verification, sources } of answer.items) {
+      const item = element("li");
+      const result = element("p");
+      result.append(element("strong", label), document.createTextNode(` — ${value}`));
+      item.append(result);
+      const context = [entity, period].filter(Boolean).join(" · ");
+      if (context) item.append(element("p", context, "answer-evidence"));
+      if (sources.length) {
+        const support = verification === "verified" ? "Independently checked" : "Independent verification pending";
+        item.append(element("p", `${sources.join(" · ")} · ${support}`, "answer-evidence"));
+      }
+      list.append(item);
+    }
+    section.append(list);
+  }
+  return section;
+}
+
 function renderDetails(job) {
   const details = $("run-details");
   details.replaceChildren();
   const scenario = job.results["scenario.json"];
   const summary = job.results["run_summary.json"];
   const gemini = job.results["gemini_readiness.json"];
+  const ollama = job.results["ollama_readiness.json"];
   if (scenario) {
-    details.append(element("p", `${scenario.model_execution} · ${scenario.generation_requests} Gemini generation attempts`));
+    const answer = summary?.answer || scenario.answer;
+    if (scenario.document_lookup) details.append(element("p", "Document Q&A"));
+    details.append(renderAnswer(answer));
+    if (scenario.ollama) {
+      const { requests, original_context_bytes: original, compact_context_bytes: compact } = scenario.ollama;
+      details.append(element("p", `${scenario.model_execution} · ${requests} local requests`));
+      if (original > 0) {
+        const reduction = Math.round(100 * (1 - compact / original));
+        details.append(element("p", `Model context: ${compact.toLocaleString()} bytes (${reduction}% smaller)`));
+      }
+    } else {
+      details.append(element("p", `${scenario.model_execution} · ${scenario.generation_requests} Gemini generation attempts`));
+    }
     if (summary) {
       details.append(element("p", `Report ${scenario.report_status} · ${summary.claim_count} claims · ${summary.calculation_count} calculations`));
       if (summary.health_gate) details.append(element("p", `Health Gate decision: ${summary.health_gate.decision}`));
     }
     const values = Object.entries(scenario.calculations).map(([name, value]) =>
       `${metrics[name] || name} ${value}${name === "current_ratio" ? "×" : "%"}`);
-    if (values.length) details.append(element("p", values.join(" · ")));
+    if (!answer && values.length) details.append(element("p", values.join(" · ")));
     appendList(details, Object.entries(scenario.checks).map(([label, passed]) => `${passed ? "✓" : "✗"} ${label}`));
     if (scenario.retry_nodes.length) details.append(element("p", `Retried: ${scenario.retry_nodes.join(" → ")}`));
     if (summary?.issues.length) {
@@ -169,6 +222,7 @@ function renderDetails(job) {
       details.append(issues);
     }
   }
+  if (ollama && !scenario) details.append(element("p", ollama.message));
   if (gemini) {
     const text = gemini.blocker === "missing_credential" ? "No key configured. Zero requests sent." :
       `${gemini.metadata_requests} metadata requests · zero Gemini generation requests`;

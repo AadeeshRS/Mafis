@@ -1,0 +1,16 @@
+digraph Retry {
+  graph [rankdir=LR, bgcolor=transparent, pad=.18, ranksep=.42, fontname="Arial"];
+  node [shape=box, style="rounded,filled", fillcolor="#F8DDC9", color="#823711",
+        fontcolor="#013230", fontname="Arial", margin=".18,.10"];
+  edge [color="#465C54", fontname="Arial", fontcolor="#465C54", arrowsize=.7];
+  missing [label="Net income omitted"];
+  gate [label="Health Gate blocks"];
+  planner [label="Planner allocates\none retry"];
+  rerun [label="Rerun DocumentAgent"];
+  recover [label="Verify recovered net income"];
+  engine [label="Financial Engine\ncomputes net margin"];
+  success [label="Health Gate passes\n48.8493% net margin", fillcolor="#DEE7D9", color="#19574D"];
+  partial [label="Gate stays blocked\nPartial report"];
+  missing -> gate -> planner -> rerun -> recover -> engine -> success;
+  rerun -> partial [label="Omitted again"];
+}

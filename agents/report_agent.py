@@ -22,6 +22,10 @@ SectionTitle = Literal["Executive Summary", "Company Overview", "Financial Healt
 _TITLES = ("Executive Summary", "Company Overview", "Financial Health", "Sources", "Support and Uncertainty", "Limitations")
 _EXTENDED_TITLES = _TITLES[:3] + ("Market Context", "Risk Assessment") + _TITLES[3:]
 _FULL_TITLES = _EXTENDED_TITLES[:5] + ("Bull Case", "Bear Case", "Key Contradictions") + _EXTENDED_TITLES[5:]
+_DOCUMENT_LIMITATIONS = (
+    "The answer is limited to excerpts retrieved from the supplied document.",
+    "Verification confirms exact wording and source location. Relevance is selected by the model.",
+)
 _EXTENDED_LIMITATIONS = (
     "Independent verification checks indexed source evidence and deterministic replay; it does not establish external truth or source independence.",
     "Market context uses constrained quotations with historical/as-of dates, not live prices or current news inference.",
@@ -54,6 +58,7 @@ class AnalysisMap(EvidenceModel):
     issues: tuple[AgentIssue, ...] = ()
     extended: bool = False
     full: bool = False
+    document_lookup: bool = False
     contradictions: tuple[ContradictionRecord, ...] = ()
     retry_decisions: tuple[RetryDecision, ...] = ()
     health_gate: GateResult | None = None
@@ -76,9 +81,10 @@ def _safe(text):
 
 
 class ReportAgent:
-    def __init__(self, memory: SharedMemory, retriever, *, extended: bool = False, full: bool = False):
+    def __init__(self, memory: SharedMemory, retriever, *, extended: bool = False, full: bool = False, document_lookup=False):
         self.memory, self.retriever = memory, retriever
         self.extended, self.full = extended or full, full
+        self.document_lookup = document_lookup
 
     def _source_claim(self, claim):
         if not claim.evidence or not all(self.retriever.validate_evidence(e) for e in claim.evidence):
@@ -105,9 +111,9 @@ class ReportAgent:
             raise ValueError(shape_error)
         if claim.verification_status not in ("pending", "verified") or claim.support_level == "unsupported":
             raise ValueError("Claim has unresolved or insufficient support")
-        if self.extended:
+        if self.extended or self.document_lookup:
             if not self.memory.is_current_verified(claim.claim_id):
-                raise ValueError("Extended reports require an exact independent verification record")
+                raise ValueError("Reports in this mode require an exact independent verification record")
             if self.memory.get_dependency_freshness(claim.claim_id) != "current":
                 raise ValueError("Claim dependencies are superseded")
         evidence, input_refs, assumptions, dependency_refs = [], (), [], ()
@@ -221,6 +227,8 @@ class ReportAgent:
         rejected = list(issues) + list(exclusion_issues)
         membership=self._section_membership(entries)
         titles, options = _TITLES, {}
+        if self.document_lookup:
+            options["limitations"] = _DOCUMENT_LIMITATIONS
         if self.extended:
             titles = _EXTENDED_TITLES
             options["limitations"] = _EXTENDED_LIMITATIONS
@@ -235,7 +243,7 @@ class ReportAgent:
                 if decision.outcome=="unresolved":
                     rejected.append(AgentIssue(code="unresolved_reanalysis",message=decision.decision_id+": "+decision.reason))
         return AnalysisMap(run_id=self.memory.run_id, execution_mode=execution_mode, issues=tuple(rejected),
-            extended=self.extended, full=self.full, health_gate=health_gate,
+            extended=self.extended, full=self.full, document_lookup=self.document_lookup, health_gate=health_gate,
             contradictions=tuple(self.memory.get_contradictions()) if self.full else (),
             retry_decisions=tuple(self.memory.get_retry_decisions()) if self.full else (),
             excluded_claim_refs=tuple(excluded), sections=tuple(
@@ -257,6 +265,8 @@ class ReportAgent:
         titles = _FULL_TITLES if self.full else _EXTENDED_TITLES if self.extended else _TITLES
         if analysis_map.full != self.full:
             raise ValueError("Analysis Map full mode changed")
+        if analysis_map.document_lookup != self.document_lookup or (self.document_lookup and analysis_map.limitations != _DOCUMENT_LIMITATIONS):
+            raise ValueError("Analysis Map document lookup mode or limitations changed")
         if self.full:
             if (analysis_map.contradictions != tuple(self.memory.get_contradictions())
                     or analysis_map.retry_decisions != tuple(self.memory.get_retry_decisions())):
@@ -309,13 +319,30 @@ class ReportAgent:
 
     def _render(self, analysis_map: AnalysisMap) -> str:
         by_title = {s.title: s.entries for s in analysis_map.sections}
-        sources = tuple(dict.fromkeys(e for entry in by_title["Sources"] for e in entry.evidence))
+        entries = by_title["Sources"]
+        sources = tuple(dict.fromkeys(e for entry in entries for e in (
+            self.memory.resolve(entry.claim_ref).evidence if self.document_lookup else entry.evidence)))
         source_ids = {e: f"S{index}" for index, e in enumerate(sources, 1)}
         calculations = tuple(dict.fromkeys(e.calculation_ref for e in by_title["Sources"] if e.calculation_ref))
         calc_ids = {ref: f"C{index}" for index, ref in enumerate(calculations, 1)}
 
         def citations(entry):
             return " ".join(f"[{source_ids[e]}]" for e in entry.evidence)
+
+        if self.document_lookup:
+            lines = ["# Document Analysis", "", "Execution: " + _safe(analysis_map.execution_mode) + ".",
+                     "", "## Document Evidence", ""]
+            for entry in by_title["Company Overview"]:
+                claim = self.memory.resolve(entry.claim_ref)
+                lines.extend("> " + _safe(line) for line in claim.claim.splitlines())
+                lines.extend((" ".join(f"[{source_ids[e]}]" for e in claim.evidence), ""))
+            lines.extend(("## Sources", ""))
+            for evidence, label in source_ids.items():
+                lines.append(f"- [{label}] {_safe(evidence.source)}, PDF page {evidence.page}. {_safe(evidence.locator)}.")
+            lines.extend(("", "## Limitations", ""))
+            lines.extend("- " + _safe(text) for text in analysis_map.limitations)
+            lines.extend("- " + _safe(issue.message) for issue in analysis_map.issues)
+            return "\n".join(lines) + "\n"
 
         lines = ["# Financial Analysis", "", "## Executive Summary", "",
             ("This analysis includes only independently checked claims. Risk checks establish traceability, not proven outcomes."
@@ -428,9 +455,7 @@ class ReportAgent:
         analysis_map = analysis_map or self.build_analysis_map()
         analysis_map = AnalysisMap.model_validate(analysis_map.model_dump(round_trip=True))
         self.validate_analysis_map(analysis_map)
-        has_financial = any(s.title == "Financial Health" and s.entries for s in analysis_map.sections)
-        blocked = analysis_map.health_gate is not None and analysis_map.health_gate.decision != "passed"
-        report = FinancialReport(status="partial" if analysis_map.issues or not has_financial or blocked else "success",
+        report = FinancialReport(status=self._report_status(analysis_map),
             analysis_map=analysis_map, markdown=self._render(analysis_map))
         self.validate_report(report)
         return report
@@ -438,10 +463,13 @@ class ReportAgent:
     def validate_report(self, report: FinancialReport) -> None:
         report = FinancialReport.model_validate(report.model_dump(round_trip=True))
         self.validate_analysis_map(report.analysis_map)
-        has_financial = any(s.title == "Financial Health" and s.entries for s in report.analysis_map.sections)
-        blocked = report.analysis_map.health_gate is not None and report.analysis_map.health_gate.decision != "passed"
-        expected_status = "partial" if report.analysis_map.issues or not has_financial or blocked else "success"
-        if report.status != expected_status:
+        if report.status != self._report_status(report.analysis_map):
             raise ValueError("Report status does not match its limitations")
         if report.markdown != self._render(report.analysis_map):
             raise ValueError("Report text differs from the validated source/engine-backed rendering")
+
+    def _report_status(self, analysis_map):
+        section = "Company Overview" if self.document_lookup else "Financial Health"
+        has_evidence = any(s.title == section and s.entries for s in analysis_map.sections)
+        blocked = analysis_map.health_gate is not None and analysis_map.health_gate.decision != "passed"
+        return "partial" if analysis_map.issues or not has_evidence or blocked else "success"

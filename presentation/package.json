@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "diagrams": "node render_diagrams.mjs"
+  },
+  "dependencies": {
+    "@viz-js/viz": "3.31.0"
+  }
+}

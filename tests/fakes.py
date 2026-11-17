@@ -45,6 +45,8 @@ class GroundedMockLLM:
                 del response["missing"]
                 response["sections"]=["Executive Summary","Company Overview","Financial Health","Sources","Support and Uncertainty","Limitations"]
                 response["limitations"]=["Explicit arithmetic test double; not live LLM performance"]
+        elif payload["task"] == "document_lookup":
+            response = {"passage_ids": [], "coverage": "none"}
         elif payload["task"] == "financial_plan":
             response = {"operations": payload["requested_operations"]}
         elif payload["task"] == "financial_interpretation":

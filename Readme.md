@@ -31,7 +31,11 @@ environment needs `python -m pip install -r requirements-phase1.txt`.
 Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/). Run the complete pytest
 suite, choose a focused suite, or start a workflow scenario. Reports, analysis maps,
 evidence, scenario checks, and terminal output are available from each run. The
-dashboard listens on loopback and stores run history and uploaded PDFs in
+run output shows the submitted question and its source-backed answer or a reason
+the question could not be answered. The Markdown report includes the same answer.
+Each report is written to the local run folder. **Download report (.md)** saves a
+copy through the browser. The dashboard listens on loopback and stores run
+history and uploaded PDFs in
 `output/test_lab/dashboard/`. Uploaded PDFs require a title, company and HTTP(S)
 source URL for citations. The URL records provenance and is not downloaded.
 
@@ -45,10 +49,18 @@ risk and the Health Gate. Full adds Bull, Bear, Critic and the targeted retry.
 | Use case | Expected outcome |
 | --- | --- |
 | Annual financial health | Successful report on the bundled filing |
+| Ask the document | Cited verbatim excerpts or a reason the retrieved evidence was insufficient |
 | Recoverable evidence gap | One targeted retry restores net income and produces a successful report |
 | Persistent evidence gap | One targeted retry is exhausted and the report remains partial |
 | Missing document | Partial report with zero model calls |
 | Unsupported quarterly request | Partial report with zero model calls |
+
+Use **Ask the document** with **Local Ollama** to search the selected PDF for a
+specific disclosure. The app also uses this route for a custom question outside
+the structured financial plan. It verifies returned quotations against the local
+index and cites the PDF pages. The scope is the supplied source and retrieved
+passages. Calculations still use the financial engine, and the offline mock
+defaults to returning an empty answer for document questions.
 
 ### Terminal checks
 
@@ -89,6 +101,31 @@ equivalent is below. The cap includes transport retries and the workflow retry's
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.test_lab sample --case nvidia_2024 --workflow full --live --free-tier-confirmed --request-budget 6
 ```
+
+### Local Ollama with DeepSeek-R1
+
+Start Ollama and install the model once with `ollama pull deepseek-r1:8b`. In the
+dashboard, use **Model setup → Check Ollama access**, then choose **Local Ollama ·
+DeepSeek-R1** under **Execution mode**. Phase 1, Extended, and Full all support local
+generation. The evidence-gap injection scenarios use the offline mocks.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.test_lab ollama
+.\.venv\Scripts\python.exe -m scripts.test_lab sample --ollama --case apple_2024 --workflow full
+```
+
+The direct `graph.py` CLI also accepts `--ollama` with its usual document arguments.
+Set `MAFIS_OLLAMA_MODEL` in `.env` to use another installed DeepSeek-R1 tag. Ollama
+requests go to `127.0.0.1:11434` and require no API key. MiniLM retrieval runs on
+the machine after its one-time model download.
+
+The local adapter sends compact rows and short evidence IDs. It resolves those
+IDs back to the exact source cells, verified premises, and calculation references
+before the existing agent checks. Each request has an 8 KiB JSON body limit and a
+4,096-token context window. The dashboard and run summary show the original and
+compact evidence sizes, and the summary includes per-request token counts when
+Ollama reports them. Large requests that still exceed the limit produce a visible
+error. Local inference time depends on how much of the model fits on the GPU.
 
 ## Full flow (Batch 2)
 

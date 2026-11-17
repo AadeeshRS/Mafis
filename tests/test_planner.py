@@ -41,3 +41,18 @@ def test_supported_analysis_omits_out_of_scope_recommendations():
 def test_unsupported_periods_are_not_silently_treated_as_fiscal_years(query):
     plan = PlannerAgent().build_graph(query, True)
     assert plan.status == "unsupported" and plan.issues[0].code == "unsupported_period"
+
+
+def test_full_plan_does_not_replace_market_share_with_financial_health():
+    question = "market share in mobile phones industry of Apple Inc."
+    plan = PlannerAgent().build_full_plan(question, True)
+    assert plan.query == question
+    assert plan.status == "unsupported" and plan.issues[0].code == "unsupported_market_share"
+    assert not plan.operations and not plan.tasks
+
+
+def test_source_fact_question_stays_scoped_in_full_mode():
+    plan = PlannerAgent().build_full_plan("Analyze FY2024 revenue", True)
+    assert plan.status == "ready"
+    assert plan.metrics == plan.requested_facts == ("revenue",)
+    assert not plan.operations
