@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Run and inspect the MAFIS financial analysis test workflows locally.">
+  <title>MAFIS Test Lab</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#overview" aria-label="MAFIS Test Lab home">
+      <span class="brand-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>MAFIS<small>TEST LAB</small></span>
+    </a>
+    <nav aria-label="Workspace">
+      <a href="#overview" aria-current="location"><span class="nav-icon grid-icon" aria-hidden="true">▦</span> Overview</a>
+      <a href="#suites"><span class="nav-icon" aria-hidden="true">›_</span> Test suites</a>
+      <a href="#samples"><span class="nav-icon" aria-hidden="true">▤</span> Sample library</a>
+      <a href="#gemini"><span class="nav-icon" aria-hidden="true">⌁</span> Gemini setup</a>
+      <a href="#history"><span class="nav-icon" aria-hidden="true">◷</span> Run history</a>
+    </nav>
+    <div class="sidebar-footer"><span class="dot"></span> Local workspace</div>
+  </aside>
+  <main>
+    <div class="workspace" id="overview">
+      <header class="page-header">
+        <div>
+          <p class="section-label">MAFIS / Testing</p>
+          <h1>Test workspace</h1>
+          <p>Run financial analysis workflows and inspect the evidence behind every result.</p>
+        </div>
+        <button class="button primary" type="button" data-suite="all"><span aria-hidden="true">▶</span> Run all tests</button>
+      </header>
+
+      <div class="status-grid" aria-label="Environment status">
+        <article class="status-card"><span class="status-icon" aria-hidden="true">›_</span><div><h2>Default execution</h2><p>Offline mock <span class="tag green">No API cost</span></p></div></article>
+        <article class="status-card"><span class="status-icon" aria-hidden="true">▤</span><div><h2>Sample documents</h2><p><span id="sample-count">…</span> annual reports</p></div></article>
+        <a class="status-card" href="#gemini"><span class="status-icon" aria-hidden="true">⌁</span><div><h2>Gemini credential</h2><p id="key-status">Checking setup…</p></div><span class="status-arrow" aria-hidden="true">↗</span></a>
+      </div>
+
+      <p id="notice" class="notice" role="status" hidden></p>
+      <div class="workbench">
+        <section class="panel" aria-labelledby="scenario-title">
+          <div class="panel-head"><span class="panel-icon" aria-hidden="true">▷</span><div><h2 id="scenario-title">Run a scenario</h2><p>Choose a workflow and a document to test.</p></div></div>
+          <form id="scenario-form" class="scenario-form">
+            <label class="field">Document <select id="case" required></select></label>
+            <div id="custom-fields" class="custom-fields" hidden>
+              <label class="field">PDF file <input id="pdf" type="file" accept=".pdf,application/pdf"><small>Up to 25 MiB. The PDF is saved with this local run.</small></label>
+              <div class="fields-grid">
+                <label class="field">Company <input id="entity" maxlength="120" placeholder="Company name"></label>
+                <label class="field">Document title <input id="title" maxlength="200" placeholder="FY2024 Annual Report"></label>
+              </div>
+              <label class="field">Source URL <input id="source-url" type="url" maxlength="2083" placeholder="https://issuer.example/report.pdf"></label>
+            </div>
+            <div class="fields-grid">
+              <label class="field">Workflow <select id="workflow" required></select></label>
+              <label class="field">Use case <select id="scenario" required></select></label>
+            </div>
+            <p class="field-help" id="scenario-hint"></p>
+            <label class="field">Question <textarea id="question" rows="2" maxlength="1000"></textarea></label>
+            <label class="field">Execution mode <select id="mode">
+              <option value="mock">Offline mock · test embeddings</option>
+              <option value="minilm">Offline mock · MiniLM retrieval</option>
+              <option value="live">Live Gemini · MiniLM retrieval</option>
+            </select></label>
+            <div id="live-fields" class="live-fields" hidden>
+              <p>Live Gemini sends the question and retrieved excerpts to Google. MiniLM can require a one-time download.</p>
+              <label class="confirmation"><input type="checkbox" id="confirm-free"> I checked my project’s free-tier quota for the configured models in AI Studio.</label>
+              <label class="field">Maximum Gemini attempts, including retries <input type="number" id="budget" min="1" max="12" value="6"></label>
+            </div>
+            <button id="run-scenario" class="button primary" type="submit"><span aria-hidden="true">▶</span> Run scenario</button>
+          </form>
+        </section>
+
+        <section class="panel results" aria-labelledby="results-title">
+          <div class="panel-head"><span class="panel-icon" aria-hidden="true">›_</span><div><h2 id="results-title">Run output</h2><p id="run-label">Waiting for a test to start</p></div><span id="run-status" class="tag neutral" role="status">Idle</span></div>
+          <div id="run-details" class="run-details" hidden></div>
+          <div id="artifacts" class="artifacts" aria-label="Run downloads" hidden></div>
+          <div class="console">
+            <div class="console-top"><span class="dot"></span> Terminal output</div>
+            <div id="log-empty" class="console-empty"><span aria-hidden="true">›_</span><p>No output yet</p><small>Start a scenario or test suite to see the results here.</small></div>
+            <pre id="log" tabindex="0" aria-label="Terminal output" hidden></pre>
+          </div>
+        </section>
+      </div>
+
+      <section id="suites" class="section" aria-labelledby="suites-title">
+        <div class="section-head"><div><h2 id="suites-title">Test suites</h2><p>Run the complete regression or check a specific subsystem.</p></div><span class="tag neutral">Pytest · offline</span></div>
+        <div id="suite-list" class="card-grid"></div>
+        <div class="section-head subhead"><div><h3>Evaluation checks</h3><p>Measure retrieval, document coverage and the offline baseline.</p></div></div>
+        <div id="evaluation-list" class="card-grid"></div>
+      </section>
+
+      <section id="samples" class="section" aria-labelledby="samples-title">
+        <div class="section-head"><div><h2 id="samples-title">Sample library</h2><p>Use the bundled FY2024 filings to exercise the financial workflow.</p></div></div>
+        <div id="sample-list" class="card-grid"></div>
+      </section>
+
+      <section id="gemini" class="section" aria-labelledby="gemini-title">
+        <div class="section-head"><div><h2 id="gemini-title">Gemini setup</h2><p>Check access to the models configured for MAFIS.</p></div></div>
+        <div class="panel provider-panel">
+          <div><h3 id="key-heading">Checking for a credential…</h3>
+            <p>Set <code>GEMINI_API_KEY</code> or <code>GOOGLE_API_KEY</code> in the repository’s <code>.env</code>. The check makes model metadata requests and uses zero generation tokens.</p>
+            <p>Live testing needs an eligible model and available project quota. Check the tier and limits in <a href="https://aistudio.google.com/usage" target="_blank" rel="noreferrer">Google AI Studio</a>.</p>
+          </div>
+          <button id="check-key" class="button secondary" type="button" data-check="key">Check Gemini access</button>
+        </div>
+      </section>
+
+      <section id="history" class="section" aria-labelledby="history-title">
+        <div class="section-head"><div><h2 id="history-title">Run history</h2><p>Open a previous run to review its logs and artifacts.</p></div></div>
+        <div id="history-list" class="panel history"></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -19,6 +19,77 @@ See the [Phase 1 acceptance report](useful_md_files/phase1-acceptance.md) for ac
 measurements, failures, and the remaining acceptance conditions. Batch 2 adds an
 opt-in full flow; the four-phase architecture is unchanged.
 
+## Test Lab dashboard
+
+From the repository root, use the existing Phase 1 Python environment. A fresh
+environment needs `python -m pip install -r requirements-phase1.txt`.
+
+```powershell
+.\.venv\Scripts\python.exe -m dashboard.server
+```
+
+Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/). Run the complete pytest
+suite, choose a focused suite, or start a workflow scenario. Reports, analysis maps,
+evidence, scenario checks, and terminal output are available from each run. The
+dashboard listens on loopback and stores run history and uploaded PDFs in
+`output/test_lab/dashboard/`. Uploaded PDFs require a title, company and HTTP(S)
+source URL for citations. The URL records provenance and is not downloaded.
+
+### Sample cases
+
+The dashboard includes downloadable FY2024 filings from NVIDIA, Apple, Coca-Cola
+and AMD. Annual financial health exercises extraction, revenue growth, operating
+and net margins, and liquidity. Extended adds verification, a dated Fed snapshot,
+risk and the Health Gate. Full adds Bull, Bear, Critic and the targeted retry.
+
+| Use case | Expected outcome |
+| --- | --- |
+| Annual financial health | Successful report on the bundled filing |
+| Recoverable evidence gap | One targeted retry restores net income and produces a successful report |
+| Persistent evidence gap | One targeted retry is exhausted and the report remains partial |
+| Missing document | Partial report with zero model calls |
+| Unsupported quarterly request | Partial report with zero model calls |
+
+### Terminal checks
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.test_lab suite
+.\.venv\Scripts\python.exe -m scripts.test_lab suite --group provider
+.\.venv\Scripts\python.exe -m scripts.test_lab sample --case nvidia_2024 --scenario corrected
+.\.venv\Scripts\python.exe -m scripts.test_lab sample --case apple_2024 --workflow extended
+.\.venv\Scripts\python.exe -m scripts.test_lab retrieval
+.\.venv\Scripts\python.exe -m scripts.test_lab evaluation
+.\.venv\Scripts\python.exe -m scripts.test_lab coverage
+.\.venv\Scripts\python.exe -m scripts.test_lab key
+```
+
+Each command prints its output directory. Scenario expectations and pytest
+assertions affect the exit code. For a custom PDF, pass `--pdf`, `--source-url`,
+`--title`, and `--entity`. You can add `--question` to either document type. Custom
+clean runs show the actual report status so you can judge the result against your
+question. `--real-embeddings` exercises MiniLM retrieval and can trigger its initial
+model download. The default sample run uses deterministic test embeddings.
+
+### Gemini key and free testing
+
+Offline pytest, mock scenarios, and offline evaluation use zero Gemini requests.
+A Gemini key is required for live generation. Copy `.env.example` to `.env` and set
+`GEMINI_API_KEY` or `GOOGLE_API_KEY`. **Check Gemini access** and the terminal `key`
+command test metadata access for each unique configured model without generating
+content. Successful metadata access leaves the project's generation quota and billing
+unverified.
+
+For live use, check your project's model quota and tier in
+[Google AI Studio](https://aistudio.google.com/usage) and consult
+[Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing). Live runs send the
+question and retrieved excerpts to Gemini. The dashboard requires explicit live
+selection, free-tier confirmation and a per-run transport attempt cap. The terminal
+equivalent is below. The cap includes transport retries and the workflow retry's calls.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.test_lab sample --case nvidia_2024 --workflow full --live --free-tier-confirmed --request-budget 6
+```
+
 ## Full flow (Batch 2)
 
 `run_full_pipeline` / `build_full_graph` add constrained Bull/Bear interpretations,

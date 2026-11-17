@@ -1,5 +1,6 @@
 """Index the case manifest once and evaluate separate development/validation sets."""
 
+import argparse
 import json
 from pathlib import Path
 from time import perf_counter
@@ -10,9 +11,13 @@ from rag.evaluate import evaluate
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--index", type=Path)
+    parser.add_argument("--output", type=Path, default=Path("output/phase1_acceptance/retrieval_results.json"))
+    args = parser.parse_args()
     cases=json.loads(Path("tests/fixtures/phase1_cases.json").read_text())["cases"]
     validation=json.loads(Path("tests/fixtures/retrieval_validation.json").read_text())
-    index=SharedRetriever()
+    index=SharedRetriever(path=args.index) if args.index else SharedRetriever()
     results={"collection":index.collection.name,"chunk_schema":2,"reports":{}}
     for case in cases:
         start=perf_counter()
@@ -25,7 +30,7 @@ def main():
         print(json.dumps({"case":case["case_id"],**{k:v for k,v in score.items() if k!="per_query"}}),flush=True)
     rows=[r for key,score in results["reports"].items() if key!="nvidia_2024" for r in score["per_query"]]
     results["validation_aggregate"]={"queries":len(rows),"hit_at_5":sum(r["hit_at_5"] for r in rows)/len(rows),"recall_at_5":sum(r["recall_at_5"] for r in rows)/len(rows),"passage_coverage":sum(r["passage_covered"] for r in rows)/len(rows)}
-    out=Path("output/phase1_acceptance/retrieval_results.json");out.parent.mkdir(exist_ok=True,parents=True)
+    out=args.output;out.parent.mkdir(exist_ok=True,parents=True)
     out.write_text(json.dumps(results,indent=2)+"\n",encoding="utf-8")
 
 
